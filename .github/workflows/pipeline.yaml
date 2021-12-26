@@ -13,7 +13,7 @@ env:
   PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   SAM_TEMPLATE: template.yaml
-  TESTING_STACK_NAME: identity-service
+  TESTING_STACK_NAME: identity-service-dev
   TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::323749282984:role/aws-sam-cli-managed-dev-pipe-PipelineExecutionRole-173NVIIQDJK1B
   TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::323749282984:role/aws-sam-cli-managed-dev-p-CloudFormationExecutionR-14G0ILXT1OLJE
   TESTING_ARTIFACTS_BUCKET: aws-sam-cli-managed-dev-pipeline-artifactsbucket-lc7v2y3xtxkq
@@ -22,7 +22,7 @@ env:
   # testing "sam package" and "sam deploy" commands.
   # TESTING_IMAGE_REPOSITORY = '0123456789.dkr.ecr.region.amazonaws.com/repository-name'
   TESTING_REGION: us-east-2
-  PROD_STACK_NAME: identity-service
+  PROD_STACK_NAME: identity-service-prod
   PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::323749282984:role/aws-sam-cli-managed-prod-pip-PipelineExecutionRole-XUVJULMT4JTV
   PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::323749282984:role/aws-sam-cli-managed-prod-CloudFormationExecutionR-YSJ2RI9BTU5B
   PROD_ARTIFACTS_BUCKET: aws-sam-cli-managed-prod-pipeline-artifactsbucket-1wm9um55ep5bb
@@ -96,6 +96,7 @@ jobs:
         shell: bash
         run: |
           sam deploy --stack-name $(echo ${GITHUB_REF##*/} | tr -cd '[a-zA-Z0-9-]') \
+            --no-confirm-changeset \
             --capabilities CAPABILITY_IAM \
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
@@ -186,6 +187,7 @@ jobs:
       - name: Deploy to testing account
         run: |
           sam deploy --stack-name ${TESTING_STACK_NAME} \
+            --no-confirm-changeset \
             --template packaged-testing.yaml \
             --capabilities CAPABILITY_IAM \
             --region ${TESTING_REGION} \
@@ -231,6 +233,7 @@ jobs:
       - name: Deploy to production account
         run: |
           sam deploy --stack-name ${PROD_STACK_NAME} \
+            --no-confirm-changeset \
             --template packaged-prod.yaml \
             --capabilities CAPABILITY_IAM \
             --region ${PROD_REGION} \
