@@ -15,6 +15,7 @@ import (
 
 var (
 	memberurl = "https://1ngy2alfy3.execute-api.us-east-2.amazonaws.com/Prod/verify"
+	chaincode = "2346"
 )
 
 type res struct {
@@ -27,11 +28,9 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		"salt": 10,
 	})
 
-	c := "2345"
+	reqBody := bytes.NewBuffer(postBody)
 
-	respBody := bytes.NewBuffer(postBody)
-
-	resp, err := http.Post(memberurl, "application/json", respBody)
+	resp, err := http.Post(memberurl, "application/json", reqBody)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
@@ -45,7 +44,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	json.Unmarshal([]byte(r), &re)
 	fmt.Printf("%v", string(r))
 	//save the response/err in firestore
-	err = bcrypt.CompareHashAndPassword([]byte(re.Hash), []byte(c))
+	err = bcrypt.CompareHashAndPassword([]byte(re.Hash), []byte(chaincode))
 	if err == nil {
 		return events.APIGatewayProxyResponse{
 			Body:       "Matched",
