@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'identity-service
+
+  Sample SAM Template for identity-service
+
+  '
+Globals:
+  Function:
+    Timeout: 5
+Resources:
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: HealthFunction
+      Handler: health
+      Runtime: go1.x
+      Architectures:
+      - x86_64
+      Tracing: Active
+      Events:
+        CatchAll:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: GET
+      Environment:
+        Variables:
+          PARAM1: VALUE
+  VerifyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: VerifyFunction
+      Handler: verify
+      Runtime: go1.x
+      Architectures:
+      - x86_64
+      Tracing: Active
+      Events:
+        CatchAll:
+          Type: Api
+          Properties:
+            Path: /verify
+            Method: GET
+      Environment:
+        Variables:
+          PARAM1: VALUE
