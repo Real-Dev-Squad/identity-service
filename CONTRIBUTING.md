@@ -66,7 +66,7 @@ git checkout -b feature/login-form
 
 6. **Just do it!**
 
-Perform the tasks you wanted to, can be anything, ranging from fixing simple typo to re-designing the whole page!
+Perform the tasks you wanted to.
 
 7. **Committing your changes**
 
