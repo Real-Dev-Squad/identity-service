@@ -123,6 +123,6 @@ Now go to your forked repository and you'll see that **This branch is xx commits
 
 11. **Review stage**
 
-Wait for it to get reviewed, make the changes required (if any) , commit your changes and push the changes again in you forked repository as mentioned in **Step 7** and **Step 10**, your commits will be added to the same pull request you had opened earlier (if it is NOT closed).
+Wait for it to get reviewed, make the changes required (if any) , commit your changes and push the changes again in your forked repository as mentioned in **Step 7** and **Step 10**, your commits will be added to the same pull request you had opened earlier (if it is NOT closed).
 
 12. **Congratulations on making your first Pull Request! 🎉**
