@@ -27,6 +27,7 @@ You should have some things pre-installed -
 ## To Run locally
 
 ```
+sam build
 sam local start-api
 ```
 
