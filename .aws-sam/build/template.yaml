@@ -27,6 +27,8 @@ Resources:
       Environment:
         Variables:
           PARAM1: VALUE
+    Metadata:
+      SamResourceId: HealthFunction
   VerifyFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -45,3 +47,5 @@ Resources:
       Environment:
         Variables:
           PARAM1: VALUE
+    Metadata:
+      SamResourceId: VerifyFunction
