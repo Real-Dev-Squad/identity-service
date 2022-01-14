@@ -3,26 +3,67 @@ package main
 import (
 	// "errors"
 	"context"
-	"fmt"
 	// "io/ioutil"
 	"log"
-
-	// "net/http"
+	"net/http"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"/home/mehulkc/oss/identity-service/health/models"
 
+	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
-	"google.golang.org/api/option"
+	"github.com/gin-gonic/gin"
 	"google.golang.org/api/iterator"
-
+	"google.golang.org/api/option"
 )
 
 var (
 	memberurl = "https://1ngy2alfy3.execute-api.us-east-2.amazonaws.com/Prod/health"
+	firestoreCredentialsLocation = "/home/mehulkc/oss/identity-service/firebase.json"
 )
 
-func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func handler(request events.APIGatewayProxyRequest c *gin.Context) (events.APIGatewayProxyResponse, error) {
+
+	ctx := context.Background()
+	sa := option.WithCredentialsFile(firestoreCredentialsLocation)
+	app, err := firebase.NewApp(ctx, nil, sa)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	client, err := app.Firestore(ctx)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer client.Close()
+	var newGoals []models.User
+	iter := client.Collection("users").Documents(ctx)
+
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Failed to iterate: %v", err)
+		}
+
+		log.Print(doc.Data())
+
+		var tempGoals models.User
+		if err := doc.DataTo(&tempGoals); err != nil {
+			break
+		}
+		newGoals = append(newGoals, tempGoals)
+	}
+
+	c.IndentedJSON(http.StatusOK, gin.H{
+		"goals":   newGoals,
+		"message": "Goals returned successfully!",
+	})
+
+	//TODO: 
 	// resp, err := http.Get(memberurl)
 
 	// if err != nil {
@@ -36,47 +77,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	// fmt.Printf("%v", string(r))
 
 	//TODO:save the response/err in firestore
-
-	// Use a service account
-	ctx := context.Background()
-	sa := option.WithCredentialsFile("./firebase.json")
-	app, err := firebase.NewApp(ctx, nil, sa)
-	client, err := app.Firestore(ctx)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Println(app)
-// create data 
-
-defer client.Close()
-// [START firestore_setup_dataset_pt2]
-_, _, err = client.Collection("logs").Add(ctx, map[string]interface{}{
-	"first":  "Alan",
-	"middle": "Mathison",
-	"last":   "Turing",
-	"born":   1912,
-})
-if err != nil {
-	log.Fatalf("Failed adding aturing: %v", err)
-}
-
-
-
-	// read tdata 
-	iter := client.Collection("logs").Documents(ctx)
-	for {
-		doc, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			log.Fatalf("Failed to iterate: %v", err)
-		}
-		fmt.Println(doc.Data())
-	}
-	if err != nil {
-		log.Fatalf("Failed adding alovelace: %v", err)
-	}
 
 	return events.APIGatewayProxyResponse{
 		Body:       "Awesome, Your server health is good!!!!",
