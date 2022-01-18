@@ -24,7 +24,6 @@ env:
 jobs:
   build-and-package-testing:
     if: github.ref == 'refs/heads/develop'
-    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -59,7 +58,6 @@ jobs:
 
   build-and-package-prod:
     if: github.ref == 'refs/heads/main'
-    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -94,7 +92,7 @@ jobs:
 
   deploy-testing:
     if: github.ref == 'refs/heads/develop'
-    needs: [build-and-package]
+    needs: [build-and-package-testing]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -128,6 +126,7 @@ jobs:
 
   deploy-prod:
     if: github.ref == 'refs/heads/main'
+    needs: [build-and-package-prod]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
