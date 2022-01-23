@@ -9,9 +9,6 @@ Description: >
 Globals:
   Function:
     Timeout: 5
-    Environment:
-      Variables:
-        firestoreCred:
 
 Resources:
   HealthCheckFunction:
