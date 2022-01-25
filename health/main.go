@@ -3,43 +3,44 @@ package main
 import (
 	// "errors"
 	"context"
+	"io/ioutil"
+	"net/http"
+	"os"
+
+	"fmt"
 	// "io/ioutil"
 	"log"
-	"net/http"
+	// "net/http"
 
-	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
-	"/home/mehulkc/oss/identity-service/health/models"
-
-	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
-	"github.com/gin-gonic/gin"
+	"github.com/aws/aws-lambda-go/events"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
 var (
-	memberurl = "https://1ngy2alfy3.execute-api.us-east-2.amazonaws.com/Prod/health"
-	firestoreCredentialsLocation = "/home/mehulkc/oss/identity-service/firebase.json"
+	memberurl                    = "https://1ngy2alfy3.execute-api.us-east-2.amazonaws.com/Prod/health"
+	firestoreCredentialsLocation = "/var/task/health/firebase.json"
 )
 
-func handler(request events.APIGatewayProxyRequest c *gin.Context) (events.APIGatewayProxyResponse, error) {
+func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+
+	firestoreCred := os.Getenv("FIRESTORE")
+	fmt.Println("firetsoree", firestoreCred)
 
 	ctx := context.Background()
-	sa := option.WithCredentialsFile(firestoreCredentialsLocation)
+	sa := option.WithCredentialsJSON([]byte(firestoreCred))
 	app, err := firebase.NewApp(ctx, nil, sa)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
 	client, err := app.Firestore(ctx)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer client.Close()
-	var newGoals []models.User
+	fmt.Println("client", client)
 	iter := client.Collection("users").Documents(ctx)
-
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
@@ -48,35 +49,20 @@ func handler(request events.APIGatewayProxyRequest c *gin.Context) (events.APIGa
 		if err != nil {
 			log.Fatalf("Failed to iterate: %v", err)
 		}
+		fmt.Println("DATA", doc.Data())
+	}
+	fmt.Println("firestroe", err)
 
-		log.Print(doc.Data())
-
-		var tempGoals models.User
-		if err := doc.DataTo(&tempGoals); err != nil {
-			break
-		}
-		newGoals = append(newGoals, tempGoals)
+	resp, err := http.Get(memberurl)
+	if err != nil {
+		return events.APIGatewayProxyResponse{}, err
 	}
 
-	c.IndentedJSON(http.StatusOK, gin.H{
-		"goals":   newGoals,
-		"message": "Goals returned successfully!",
-	})
-
-	//TODO: 
-	// resp, err := http.Get(memberurl)
-
-	// if err != nil {
-	// 	return events.APIGatewayProxyResponse{}, err
-	// }
-
-	// r, err := ioutil.ReadAll(resp.Body)
-	// if err != nil {
-	// 	return events.APIGatewayProxyResponse{}, err
-	// }
-	// fmt.Printf("%v", string(r))
-
-	//TODO:save the response/err in firestore
+	r, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return events.APIGatewayProxyResponse{}, err
+	}
+	fmt.Printf("%v", string(r))
 
 	return events.APIGatewayProxyResponse{
 		Body:       "Awesome, Your server health is good!!!!",
@@ -85,5 +71,45 @@ func handler(request events.APIGatewayProxyRequest c *gin.Context) (events.APIGa
 }
 
 func main() {
-	lambda.Start(handler)
+	// lambda.Start(handler)
+	Connection()
+}
+
+func Connection() {
+	ctx := context.Background()
+	sa := option.WithCredentialsFile("/home/mehulkc/oss/identity-service/health/firebase.json")
+	app, err := firebase.NewApp(ctx, nil, sa)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	client, err := app.Firestore(ctx)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer client.Close()
+
+	fmt.Println("client", client)
+	iter := client.Collection("users").Documents(ctx)
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Failed to iterate: %v", err)
+		}
+		fmt.Println("DATA", doc.Data())
+	}
+	fmt.Println("firestroe", err)
+	for {
+		collRef, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return
+		}
+		fmt.Printf("Found collection with id: %s\n", collRef.ID)
+	}
+
 }

@@ -1,1 +1,2 @@
-firebase.json
+.aws-sam/
+env.json
