@@ -184,11 +184,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	err = setIdentityStatus(client, ctx, userId, "PENDING")
-	if err != nil {
-		return events.APIGatewayProxyResponse{}, err
-	}
-
 	status, err := verify(identityURL, chaincode)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
