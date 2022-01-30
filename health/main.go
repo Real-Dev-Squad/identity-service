@@ -62,7 +62,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}
 
 		// calling user identity url
-		userUrl := fmt.Sprint(doc.Data()["identityUrl"])
+		userUrl := fmt.Sprint(doc.Data()["identityURL"])
 		var isServiceRunning bool
 		_, err = http.Get(userUrl + "/health")
 		if err != nil {
