@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -69,7 +70,7 @@ func getUsernameFromBody(body []byte) string {
  Function to get the chaincode using username
 */
 func getChaincode(client *firestore.Client, ctx context.Context, username string) (string, error) {
-	query := client.Collection("chaincodes").Where("username", "==", username).Limit(1).Documents(ctx)
+	query := client.Collection("chaincodes").Where("username", "==", username).OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
 	var chaincode string
 	for {
 		chaincodeDoc, err := query.Next()
@@ -80,6 +81,7 @@ func getChaincode(client *firestore.Client, ctx context.Context, username string
 			return "", err
 		}
 		chaincode = chaincodeDoc.Ref.ID
+		fmt.Println(chaincodeDoc.Ref.ID)
 	}
 	return chaincode, nil
 }
