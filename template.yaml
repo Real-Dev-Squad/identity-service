@@ -1,17 +1,18 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   identity-service
-  
+
   Sample SAM Template for identity-service
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 5
+    Timeout: 10
     Environment:
       Variables:
         firestoreCred: YourFirestoreCredentials
+        environment: PRODUCTION
 
 Resources:
   HealthCheckFunction:
@@ -60,4 +61,4 @@ Resources:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
             Path: /verify
-            Method: GET
+            Method: POST
