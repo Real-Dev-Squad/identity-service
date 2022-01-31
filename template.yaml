@@ -37,9 +37,6 @@ Resources:
       CodeUri: health/
       Handler: health
       Runtime: go1.x
-      Policies:
-        - SSMParameterReadPolicy:
-          ParameterName: firestoreCred
       Architectures:
         - x86_64
       Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
@@ -56,9 +53,6 @@ Resources:
       CodeUri: verify/
       Handler: verify
       Runtime: go1.x
-      Policies:
-        - SSMParameterReadPolicy:
-          ParameterName: firestoreCred
       Architectures:
         - x86_64
       Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
