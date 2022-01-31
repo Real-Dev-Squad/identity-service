@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -28,12 +27,7 @@ func getFirestoreKey() string {
 	if os.Getenv(("environment")) == "DEVELOPMENT" {
 		return os.Getenv("firestoreCred")
 	} else if os.Getenv(("environment")) == "PRODUCTION" {
-		parameterName := flag.String("", "firestoreCred", "")
-		flag.Parse()
-
-		if *parameterName == "" {
-			log.Fatalf("You must supply the name of the parameter")
-		}
+		var parameterName string = "firestoreCred"
 
 		sess := session.Must(session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable,
@@ -42,7 +36,7 @@ func getFirestoreKey() string {
 		svc := ssm.New(sess)
 
 		results, err := svc.GetParameter(&ssm.GetParameterInput{
-			Name: parameterName,
+			Name: &parameterName,
 		})
 		if err != nil {
 			log.Fatalf(err.Error())
