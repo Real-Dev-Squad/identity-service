@@ -15,12 +15,14 @@ require (
 	cloud.google.com/go/compute v0.1.0 // indirect
 	cloud.google.com/go/iam v0.1.1 // indirect
 	cloud.google.com/go/storage v1.10.0 // indirect
+	github.com/aws/aws-sdk-go v1.42.44 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
+	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 // indirect
 	golang.org/x/text v0.3.6 // indirect

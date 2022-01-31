@@ -12,6 +12,7 @@ Globals:
     Environment:
       Variables:
         firestoreCred: YourFirestoreCredentials
+        environment: PRODUCTION
 
 Resources:
   HealthCheckFunction:
