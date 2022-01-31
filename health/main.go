@@ -116,6 +116,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}
 	}
 
+	defer client.Close()
+
 	return events.APIGatewayProxyResponse{
 		Body:       "Awesome, Your server health is good!!!!",
 		StatusCode: 200,
