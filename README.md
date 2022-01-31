@@ -32,8 +32,8 @@ You should have some things pre-installed -
 - Create an application on [FireStore](https://firebase.google.com/docs/firestore) and [generate a service file](https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
 - Add the service file credentials in the sample-env.json file as a string.
 - Remove all the spaces such that the whole _json_ that you copied is in a single line
-- Replace **\n** with **\\n** in your copied json
-- Replace **"** with **\"** in your copied json
+- Replace **\n** with **\\\\n** in your copied json
+- Replace **"** with **\\"** in your copied json
 
 ### Executing the script to run the server locally
 
