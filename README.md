@@ -13,7 +13,7 @@ We are using AWS SAM(Serverless Application Model) with [golang](https://go.dev/
 #### Routes Created
 
 ```
-/health
+/getData
 /verify
 /health-check
 ```

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -109,7 +108,6 @@ func getChaincode(client *firestore.Client, ctx context.Context, username string
 			return "", err
 		}
 		chaincode = chaincodeDoc.Ref.ID
-		fmt.Println(chaincodeDoc.Ref.ID)
 	}
 	return chaincode, nil
 }
