@@ -22,6 +22,9 @@ import (
 	"google.golang.org/api/option"
 )
 
+/*
+ Structures
+*/
 type Log struct {
 	Type      string    `firestore:"type,omitempty"`
 	Timestamp time.Time `firestore:"timestamp,omitempty"`
@@ -61,6 +64,9 @@ type Diff struct {
 	Website     string    `firestore:"website,omitempty"`
 }
 
+/*
+ Structures Conversions
+*/
 func diffToRes(diff Diff) Res {
 	return Res{
 		FirstName:   diff.FirstName,
@@ -98,6 +104,9 @@ func resToDiff(res Res, username string) Diff {
 	}
 }
 
+/*
+ Setting Firestore Key for development/production
+*/
 func getFirestoreKey() string {
 	if os.Getenv(("environment")) == "DEVELOPMENT" {
 		return os.Getenv("firestoreCred")
@@ -124,9 +133,12 @@ func getFirestoreKey() string {
 }
 
 /*
- Function to initialize the firestore client
+ Utils
 */
 
+/*
+ Function to initialize the firestore client
+*/
 func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 	sa := option.WithCredentialsJSON([]byte(getFirestoreKey()))
 	app, err := firebase.NewApp(ctx, nil, sa)
@@ -142,11 +154,9 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 	return client, nil
 }
 
-func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId string) {
-	client.Collection("profileDiffs").Doc(lastdiffId).Set(ctx, map[string]interface{}{
-		"approval": "NOT APPROVED",
-	}, firestore.MergeAll)
-}
+/*
+ MODELS
+*/
 
 /*
  Logs the health of the user's service
@@ -161,6 +171,18 @@ func logHealth(client *firestore.Client, ctx context.Context, username string, i
 	client.Collection("logs").Add(ctx, newLog)
 }
 
+/*
+ sets the user's profile diff to not approved
+*/
+func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId string) {
+	client.Collection("profileDiffs").Doc(lastdiffId).Set(ctx, map[string]interface{}{
+		"approval": "NOT APPROVED",
+	}, firestore.MergeAll)
+}
+
+/*
+ Get the last profile diff of the user
+*/
 func getLastDiff(client *firestore.Client, ctx context.Context, username string) (Res, string) {
 	query := client.Collection("profileDiffs").Where("username", "==", username).Where("approval", "==", "PENDING").OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
 	var lastdiff Diff
@@ -182,6 +204,9 @@ func getLastDiff(client *firestore.Client, ctx context.Context, username string)
 	return diffToRes(lastdiff), lastdiffId
 }
 
+/*
+ Get the user's profile data
+*/
 func getUserData(client *firestore.Client, ctx context.Context, username string) Res {
 	query := client.Collection("users").Where("username", "==", username).Limit(1).Documents(ctx)
 	var userData Diff
@@ -201,6 +226,9 @@ func getUserData(client *firestore.Client, ctx context.Context, username string)
 	return diffToRes(userData)
 }
 
+/*
+ Generate and Store Profile Diff
+*/
 func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, username string) {
 	var diff Diff = resToDiff(res, username)
 	_, _, err := client.Collection("profileDiffs").Add(ctx, diff)
@@ -229,9 +257,6 @@ func getdata(client *firestore.Client, ctx context.Context, username string, use
 
 	lastdiff, lastdiffId := getLastDiff(client, ctx, username)
 	userData := getUserData(client, ctx, username)
-	fmt.Println(res)
-	fmt.Println(lastdiff)
-	fmt.Println(lastdiffId)
 	if lastdiff != res && userData != res {
 		if lastdiffId != "" {
 			setNotApproved(client, ctx, lastdiffId)
@@ -245,6 +270,9 @@ func getdata(client *firestore.Client, ctx context.Context, username string, use
 
 }
 
+/*
+ Controller
+*/
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	ctx := context.Background()

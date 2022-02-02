@@ -22,6 +22,12 @@ import (
 	"google.golang.org/api/iterator"
 )
 
+/*
+ Util
+*/
+/*
+ Setting Firestore Key for development/production
+*/
 func getFirestoreKey() string {
 	if os.Getenv(("environment")) == "DEVELOPMENT" {
 		return os.Getenv("firestoreCred")
@@ -66,6 +72,9 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 }
 
 /*
+ MODEL
+*/
+/*
  Function for setting the identityStatus in user object in firestore
 */
 func setIdentityStatus(client *firestore.Client, ctx context.Context, id string, status string) error {
@@ -78,19 +87,6 @@ func setIdentityStatus(client *firestore.Client, ctx context.Context, id string,
 	}
 
 	return nil
-}
-
-/*
- Function to extract username for the request body
-*/
-func getUsernameFromBody(body []byte) string {
-	type extractedBody struct {
-		Username string `json:"username"`
-	}
-
-	var e extractedBody
-	json.Unmarshal(body, &e)
-	return e.Username
 }
 
 /*
@@ -145,6 +141,22 @@ func getIdentityURL(client *firestore.Client, ctx context.Context, username stri
 	return identityURL, userID, identityStatus, nil
 }
 
+/*
+ Function to extract username for the request body
+*/
+func getUsernameFromBody(body []byte) string {
+	type extractedBody struct {
+		Username string `json:"username"`
+	}
+
+	var e extractedBody
+	json.Unmarshal(body, &e)
+	return e.Username
+}
+
+/*
+ Controller
+*/
 /*
  Function to verify the user
 */
