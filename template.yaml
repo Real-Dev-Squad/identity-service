@@ -8,7 +8,7 @@ Description: >
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 10
+    Timeout: 30
     Environment:
       Variables:
         firestoreCred: YourFirestoreCredentials
@@ -31,11 +31,11 @@ Resources:
             Path: /healthCheck
             Method: GET
 
-  HealthFunction:
+  GetDataFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      CodeUri: health/
-      Handler: health
+      CodeUri: get-data/
+      Handler: get-data
       Runtime: go1.x
       Architectures:
         - x86_64
@@ -44,7 +44,7 @@ Resources:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /health
+            Path: /getData
             Method: GET
 
   VerifyFunction:
