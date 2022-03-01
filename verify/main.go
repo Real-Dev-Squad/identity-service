@@ -211,7 +211,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	identityURL = identityURL + "/verify"
+	identityURL = identityURL + "/verification"
 
 	if identityStatus == "VERIFIED" {
 		return events.APIGatewayProxyResponse{
