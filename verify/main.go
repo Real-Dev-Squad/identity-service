@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	firebase "firebase.google.com/go"
 	"google.golang.org/api/option"
@@ -21,6 +22,21 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/api/iterator"
 )
+
+/*
+ Structures
+*/
+type Log struct {
+	Type      string                 `firestore:"type,omitempty"`
+	Timestamp time.Time              `firestore:"timestamp,omitempty"`
+	Meta      map[string]interface{} `firestore:"meta,omitempty"`
+	Body      map[string]interface{} `firestore:"body,omitempty"`
+}
+
+type Chaincode struct {
+	Username  string    `firestore:"username,omitempty"`
+	Timestamp time.Time `firestore:"timestamp,omitempty"`
+}
 
 /*
  Util
@@ -74,6 +90,39 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 /*
  MODEL
 */
+
+func logVerification(client *firestore.Client, ctx context.Context, status string, profileURL string, username string) {
+	var logtype string
+	var logbody map[string]interface{}
+	if status == "VERIFIED" {
+		logtype = "PROFILE_VERIFIED"
+		logbody = map[string]interface{}{
+			"username":   username,
+			"profileURL": profileURL,
+		}
+	} else if status == "BLOCKED" {
+		logtype = "PROFILE_BLOCKED"
+		logbody = map[string]interface{}{
+			"username": username,
+			"reason":   "chaincode not linked",
+		}
+		newChaincode := Chaincode{
+			Username:  username,
+			Timestamp: time.Now(),
+		}
+		client.Collection("chaincodes").Add(ctx, newChaincode)
+	}
+	newLog := Log{
+		Type:      logtype,
+		Timestamp: time.Now(),
+		Meta: map[string]interface{}{
+			"username": username,
+		},
+		Body: logbody,
+	}
+	client.Collection("logs").Add(ctx, newLog)
+}
+
 /*
  Function for setting the identityStatus in user object in firestore
 */
@@ -228,7 +277,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
-
+	logVerification(client, ctx, status, identityURL, username)
 	setIdentityStatus(client, ctx, userId, status)
 	defer client.Close()
 

@@ -8,7 +8,7 @@ import (
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	return events.APIGatewayProxyResponse{
-		Body:       "Awesome, Your Server health is good!!!",
+		Body:       "Awesome, Server health is good!!!",
 		StatusCode: 200,
 	}, nil
 }
