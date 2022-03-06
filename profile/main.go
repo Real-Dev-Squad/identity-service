@@ -4,7 +4,6 @@ import (
 	// "errors"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -48,7 +47,7 @@ type Res struct {
 }
 
 type Diff struct {
-	Username    string    `firestore:"username,omitempty"`
+	UserId      string    `firestore:"userId,omitempty"`
 	Timestamp   time.Time `firestore:"timestamp,omitempty"`
 	Approval    string    `firestore:"approval"`
 	FirstName   string    `firestore:"first_name,omitempty"`
@@ -66,7 +65,7 @@ type Diff struct {
 }
 
 type Chaincode struct {
-	Username  string    `firestore:"username,omitempty"`
+	UserId    string    `firestore:"userId,omitempty"`
 	Timestamp time.Time `firestore:"timestamp,omitempty"`
 }
 
@@ -90,9 +89,9 @@ func diffToRes(diff Diff) Res {
 	}
 }
 
-func resToDiff(res Res, username string) Diff {
+func resToDiff(res Res, userId string) Diff {
 	return Diff{
-		Username:    username,
+		UserId:      userId,
 		Timestamp:   time.Now(),
 		Approval:    "PENDING",
 		FirstName:   res.FirstName,
@@ -167,37 +166,38 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 /*
  Logs the health of the user's service
 */
-func logHealth(client *firestore.Client, ctx context.Context, username string, isServiceRunning bool) {
-	var logdata = map[string]interface{}{
-		"username":       username,
-		"serviceRunning": isServiceRunning,
-	}
+func logHealth(client *firestore.Client, ctx context.Context, userId string, isServiceRunning bool) {
 	newLog := Log{
 		Type:      "PROFILE_HEALTH",
 		Timestamp: time.Now(),
-		Meta:      logdata,
-		Body:      logdata,
+		Meta: map[string]interface{}{
+			"userId": userId,
+		},
+		Body: map[string]interface{}{
+			"userId":         userId,
+			"serviceRunning": isServiceRunning,
+		},
 	}
 	client.Collection("logs").Add(ctx, newLog)
 }
 
 /*
- Function for setting the identityStatus in user object in firestore
+ Function for setting the profileStatus in user object in firestore
 */
-func setIdentityStatus(client *firestore.Client, ctx context.Context, id string, status string, username string) {
-	client.Collection("users").Doc(id).Set(ctx, map[string]interface{}{
-		"identityStatus": status,
+func setProfileStatus(client *firestore.Client, ctx context.Context, userId string, status string) {
+	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
+		"profileStatus": status,
 	}, firestore.MergeAll)
 
 	newLog := Log{
 		Type:      "PROFILE_BLOCKED",
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
-			"username": username,
+			"userId": userId,
 		},
 		Body: map[string]interface{}{
-			"username": username,
-			"reason":   "service not running",
+			"userId": userId,
+			"reason": "service not running",
 		},
 	}
 	client.Collection("logs").Add(ctx, newLog)
@@ -215,8 +215,8 @@ func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId st
 /*
  Get the last profile diff of the user
 */
-func getLastDiff(client *firestore.Client, ctx context.Context, username string) (Res, string) {
-	query := client.Collection("profileDiffs").Where("username", "==", username).Where("approval", "==", "PENDING").OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
+func getLastDiff(client *firestore.Client, ctx context.Context, userId string) (Res, string) {
+	query := client.Collection("profileDiffs").Where("userId", "==", userId).Where("approval", "==", "PENDING").OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
 	var lastdiff Diff
 	var lastdiffId string
 	for {
@@ -239,30 +239,25 @@ func getLastDiff(client *firestore.Client, ctx context.Context, username string)
 /*
  Get the user's profile data
 */
-func getUserData(client *firestore.Client, ctx context.Context, username string) Res {
-	query := client.Collection("users").Where("username", "==", username).Limit(1).Documents(ctx)
-	var userData Diff
-	for {
-		Doc, err := query.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = Doc.DataTo(&userData)
-		if err != nil {
-			log.Fatal(err)
-		}
+func getUserData(client *firestore.Client, ctx context.Context, userId string) Res {
+	dsnap, err := client.Collection("users").Doc(userId).Get(ctx)
+	if err != nil {
+		log.Fatal(err)
 	}
+	var userData Diff
+	err = dsnap.DataTo(&userData)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return diffToRes(userData)
 }
 
 /*
  Generate and Store Profile Diff
 */
-func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, username string) {
-	var diff Diff = resToDiff(res, username)
+func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string) {
+	var diff Diff = resToDiff(res, userId)
 	_, _, err := client.Collection("profileDiffs").Add(ctx, diff)
 	if err != nil {
 		log.Fatal(err)
@@ -272,7 +267,7 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
 /*
  Getting data from the user's service
 */
-func getdata(client *firestore.Client, ctx context.Context, username string, userUrl string) {
+func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string) {
 	userUrl = userUrl + "/profile"
 	resp, err := http.Get(userUrl)
 	if err != nil {
@@ -287,13 +282,13 @@ func getdata(client *firestore.Client, ctx context.Context, username string, use
 	var res Res
 	json.Unmarshal([]byte(r), &res)
 
-	lastdiff, lastdiffId := getLastDiff(client, ctx, username)
-	userData := getUserData(client, ctx, username)
+	lastdiff, lastdiffId := getLastDiff(client, ctx, userId)
+	userData := getUserData(client, ctx, userId)
 	if lastdiff != res && userData != res {
 		if lastdiffId != "" {
 			setNotApproved(client, ctx, lastdiffId)
 		}
-		generateAndStoreDiff(client, ctx, res, username)
+		generateAndStoreDiff(client, ctx, res, userId)
 	} else if userData == res {
 		if lastdiffId != "" {
 			setNotApproved(client, ctx, lastdiffId)
@@ -313,7 +308,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	iter := client.Collection("users").Documents(ctx)
+	iter := client.Collection("users").Where("profileStatus", "==", "VERIFIED").Documents(ctx)
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
@@ -324,13 +319,11 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}
 		var userId string = doc.Ref.ID
 		var userUrl string
-		var username string
-		if str, ok := doc.Data()["identityURL"].(string); ok {
+		if str, ok := doc.Data()["profileURL"].(string); ok {
 			userUrl = str
 		} else {
 			continue
 		}
-		username = fmt.Sprint(doc.Data()["username"])
 		var isServiceRunning bool
 		_, err = http.Get(userUrl + "/health")
 		if err != nil {
@@ -339,18 +332,18 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 			isServiceRunning = true
 		}
 
-		logHealth(client, ctx, username, isServiceRunning)
+		logHealth(client, ctx, userId, isServiceRunning)
 		if !isServiceRunning {
-			setIdentityStatus(client, ctx, userId, "BLOCKED", username)
+			setProfileStatus(client, ctx, userId, "BLOCKED")
 			newChaincode := Chaincode{
-				Username:  username,
+				UserId:    userId,
 				Timestamp: time.Now(),
 			}
 			client.Collection("chaincodes").Add(ctx, newChaincode)
 			continue
 		}
 
-		getdata(client, ctx, username, userUrl)
+		getdata(client, ctx, userId, userUrl)
 	}
 
 	defer client.Close()
