@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	firebase "firebase.google.com/go"
 	"google.golang.org/api/option"
@@ -21,6 +22,21 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/api/iterator"
 )
+
+/*
+ Structures
+*/
+type Log struct {
+	Type      string                 `firestore:"type,omitempty"`
+	Timestamp time.Time              `firestore:"timestamp,omitempty"`
+	Meta      map[string]interface{} `firestore:"meta,omitempty"`
+	Body      map[string]interface{} `firestore:"body,omitempty"`
+}
+
+type Chaincode struct {
+	UserId    string    `firestore:"userId,omitempty"`
+	Timestamp time.Time `firestore:"timestamp,omitempty"`
+}
 
 /*
  Util
@@ -74,16 +90,49 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 /*
  MODEL
 */
+
+func logVerification(client *firestore.Client, ctx context.Context, status string, profileURL string, userId string) {
+	var logtype string
+	var logbody map[string]interface{}
+	if status == "VERIFIED" {
+		logtype = "PROFILE_VERIFIED"
+		logbody = map[string]interface{}{
+			"userId":     userId,
+			"profileURL": profileURL,
+		}
+	} else if status == "BLOCKED" {
+		logtype = "PROFILE_BLOCKED"
+		logbody = map[string]interface{}{
+			"userId": userId,
+			"reason": "chaincode not linked",
+		}
+		newChaincode := Chaincode{
+			UserId:    userId,
+			Timestamp: time.Now(),
+		}
+		client.Collection("chaincodes").Add(ctx, newChaincode)
+	}
+	newLog := Log{
+		Type:      logtype,
+		Timestamp: time.Now(),
+		Meta: map[string]interface{}{
+			"userId": userId,
+		},
+		Body: logbody,
+	}
+	client.Collection("logs").Add(ctx, newLog)
+}
+
 /*
- Function for setting the identityStatus in user object in firestore
+ Function for setting the profileStatus in user object in firestore
 */
-func setIdentityStatus(client *firestore.Client, ctx context.Context, id string, status string) error {
+func setProfileStatus(client *firestore.Client, ctx context.Context, id string, status string) error {
 	_, err := client.Collection("users").Doc(id).Set(ctx, map[string]interface{}{
-		"identityStatus": status,
+		"profileStatus": status,
 	}, firestore.MergeAll)
 
 	if err != nil {
-		return errors.New("unable to set identity status")
+		return errors.New("unable to set profile status")
 	}
 
 	return nil
@@ -92,8 +141,8 @@ func setIdentityStatus(client *firestore.Client, ctx context.Context, id string,
 /*
  Function to get the chaincode using username
 */
-func getChaincode(client *firestore.Client, ctx context.Context, username string) (string, error) {
-	query := client.Collection("chaincodes").Where("username", "==", username).OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
+func getChaincode(client *firestore.Client, ctx context.Context, userId string) (string, error) {
+	query := client.Collection("chaincodes").Where("userId", "==", userId).OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
 	var chaincode string
 	for {
 		chaincodeDoc, err := query.Next()
@@ -111,47 +160,39 @@ func getChaincode(client *firestore.Client, ctx context.Context, username string
 /*
  Function to get the identityURL using username
 */
-func getIdentityURL(client *firestore.Client, ctx context.Context, username string) (string, string, string, error) {
-	query := client.Collection("users").Where("username", "==", username).Limit(1).Documents(ctx)
-	var identityURL string
-	var identityStatus string
-	var userID string
-	for {
-		userDoc, err := query.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return "", "", "", err
-		}
-		if str, ok := userDoc.Data()["identityURL"].(string); ok {
-			identityURL = str
-		} else {
-			return "", "", "", errors.New("identity url is not a string")
-		}
-
-		if str, ok := userDoc.Data()["identityStatus"].(string); ok {
-			identityStatus = str
-		} else {
-			identityStatus = ""
-		}
-
-		userID = userDoc.Ref.ID
+func getProfileURL(client *firestore.Client, ctx context.Context, userId string) (string, string, error) {
+	dsnap, err := client.Collection("users").Doc(userId).Get(ctx)
+	var profileURL string
+	var profileStatus string
+	if err != nil {
+		return "", "", err
 	}
-	return identityURL, userID, identityStatus, nil
+	if str, ok := dsnap.Data()["profileURL"].(string); ok {
+		profileURL = str
+	} else {
+		return "", "", errors.New("profile url is not a string")
+	}
+
+	if str, ok := dsnap.Data()["profileStatus"].(string); ok {
+		profileStatus = str
+	} else {
+		profileStatus = ""
+	}
+
+	return profileURL, profileStatus, nil
 }
 
 /*
  Function to extract username for the request body
 */
-func getUsernameFromBody(body []byte) string {
+func getUserIdFromBody(body []byte) string {
 	type extractedBody struct {
-		Username string `json:"username"`
+		UserId string `json:"userId"`
 	}
 
 	var e extractedBody
 	json.Unmarshal(body, &e)
-	return e.Username
+	return e.UserId
 }
 
 /*
@@ -160,7 +201,7 @@ func getUsernameFromBody(body []byte) string {
 /*
  Function to verify the user
 */
-func verify(identityURL string, chaincode string) (string, error) {
+func verify(profileURL string, chaincode string) (string, error) {
 	type res struct {
 		Hash string `json:"hash"`
 	}
@@ -171,7 +212,7 @@ func verify(identityURL string, chaincode string) (string, error) {
 
 	reqBody := bytes.NewBuffer(postBody)
 
-	resp, err := http.Post(identityURL, "application/json", reqBody)
+	resp, err := http.Post(profileURL, "application/json", reqBody)
 	if err != nil {
 		return "", err
 	}
@@ -201,35 +242,35 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	var username string = getUsernameFromBody([]byte(request.Body))
-	if username == "" {
-		return events.APIGatewayProxyResponse{}, errors.New("no username provided")
+	var userId string = getUserIdFromBody([]byte(request.Body))
+	if userId == "" {
+		return events.APIGatewayProxyResponse{}, errors.New("no userId provided")
 	}
 
-	identityURL, userId, identityStatus, err := getIdentityURL(client, ctx, username)
+	profileURL, profileStatus, err := getProfileURL(client, ctx, userId)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	identityURL = identityURL + "/verification"
+	profileURL = profileURL + "/verify"
 
-	if identityStatus == "VERIFIED" {
+	if profileStatus == "VERIFIED" {
 		return events.APIGatewayProxyResponse{
 			Body: "Already Verified",
 		}, nil
 	}
 
-	chaincode, err := getChaincode(client, ctx, username)
+	chaincode, err := getChaincode(client, ctx, userId)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	status, err := verify(identityURL, chaincode)
+	status, err := verify(profileURL, chaincode)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
-
-	setIdentityStatus(client, ctx, userId, status)
+	logVerification(client, ctx, status, profileURL, userId)
+	setProfileStatus(client, ctx, userId, status)
 	defer client.Close()
 
 	return events.APIGatewayProxyResponse{

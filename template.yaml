@@ -31,11 +31,11 @@ Resources:
             Path: /healthCheck
             Method: GET
 
-  GetDataFunction:
+  ProfileFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      CodeUri: get-data/
-      Handler: get-data
+      CodeUri: profile/
+      Handler: profile
       Runtime: go1.x
       Architectures:
         - x86_64
@@ -44,7 +44,7 @@ Resources:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /getData
+            Path: /profile
             Method: GET
 
   VerifyFunction:
