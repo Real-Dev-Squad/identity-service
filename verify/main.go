@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -196,6 +197,18 @@ func getUserIdFromBody(body []byte) string {
 }
 
 /*
+	Function to generate random string
+*/
+func randSalt(n int) string {
+	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
+/*
  Controller
 */
 /*
@@ -206,8 +219,13 @@ func verify(profileURL string, chaincode string) (string, error) {
 		Hash string `json:"hash"`
 	}
 
-	postBody, _ := json.Marshal(map[string]int{
-		"salt": 10,
+	rand.Seed(time.Now().UnixNano())
+	var salt string = randSalt(21)
+
+	salt = "$2b$10$" + salt + "."
+
+	postBody, _ := json.Marshal(map[string]string{
+		"salt": salt,
 	})
 
 	reqBody := bytes.NewBuffer(postBody)
