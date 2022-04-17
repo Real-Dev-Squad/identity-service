@@ -252,7 +252,11 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	profileURL = profileURL + "/verification"
+	if profileURL[len(profileURL)-1] == '/' {
+		profileURL = profileURL + "verification"
+	} else {
+		profileURL = profileURL + "/verification"
+	}
 
 	if profileStatus == "VERIFIED" {
 		return events.APIGatewayProxyResponse{
