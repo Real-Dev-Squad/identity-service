@@ -140,7 +140,7 @@ func setProfileStatus(client *firestore.Client, ctx context.Context, id string, 
 }
 
 /*
- Function to get the chaincode using username
+ Function to get the chaincode using userId
 */
 func getChaincode(client *firestore.Client, ctx context.Context, userId string) (string, error) {
 	query := client.Collection("chaincodes").Where("userId", "==", userId).OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
@@ -159,7 +159,7 @@ func getChaincode(client *firestore.Client, ctx context.Context, userId string) 
 }
 
 /*
- Function to get the identityURL using username
+ Function to get the profileURL using userId
 */
 func getProfileURL(client *firestore.Client, ctx context.Context, userId string) (string, string, error) {
 	dsnap, err := client.Collection("users").Doc(userId).Get(ctx)
@@ -184,7 +184,7 @@ func getProfileURL(client *firestore.Client, ctx context.Context, userId string)
 }
 
 /*
- Function to extract username for the request body
+ Function to extract userId from the request body
 */
 func getUserIdFromBody(body []byte) string {
 	type extractedBody struct {
