@@ -268,7 +268,7 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
  Getting data from the user's service
 */
 func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string) {
-	userUrl = userUrl + "/profile"
+	userUrl = userUrl + "profile"
 	resp, err := http.Get(userUrl)
 	if err != nil {
 		log.Fatal(err)
@@ -324,8 +324,11 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		} else {
 			continue
 		}
+		if userUrl[len(userUrl)-1] != '/' {
+			userUrl = userUrl + "/"
+		}
 		var isServiceRunning bool
-		_, err = http.Get(userUrl + "/health")
+		_, err = http.Get(userUrl + "health")
 		if err != nil {
 			isServiceRunning = false
 		} else {
