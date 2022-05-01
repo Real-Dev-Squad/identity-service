@@ -184,7 +184,7 @@ func logHealth(client *firestore.Client, ctx context.Context, userId string, isS
 /*
  Logs the status of the user's profileDiff
 */
-func logProfileDiffStatus(client *firestore.Client, ctx context.Context, userId string, profileDiffId string) {
+func logSameProfileDiffGenerated(client *firestore.Client, ctx context.Context, userId string, profileDiffId string) {
 	newLog := Log{
 		Type:      "SAME_PROFILE_DIFF",
 		Timestamp: time.Now(),
@@ -311,7 +311,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		if lastRejectedDiff != res {
 			generateAndStoreDiff(client, ctx, res, userId)
 		} else {
-			logProfileDiffStatus(client, ctx, userId, lastRejectedDiffId)
+			logSameProfileDiffGenerated(client, ctx, userId, lastRejectedDiffId)
 		}
 	} else if userData == res {
 		if lastPendingDiffId != "" {
