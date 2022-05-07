@@ -7,62 +7,45 @@ on:
       - 'develop'
 
 env:
-  PIPELINE_USER_ACCESS_KEY_ID_PROD: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
-  PIPELINE_USER_SECRET_ACCESS_KEY_PROD: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
-  PIPELINE_USER_ACCESS_KEY_ID_TESTING: ${{ secrets.AWS_ACCESS_KEY_ID_TESTING }}
-  PIPELINE_USER_SECRET_ACCESS_KEY_TESTING: ${{ secrets.AWS_SECRET_ACCESS_KEY_TESTING }}
   SAM_TEMPLATE: template.yaml
-  TESTING_STACK_NAME: ${{ secrets.TESTING_STACK_NAME }}
-  TESTING_PIPELINE_EXECUTION_ROLE: ${{ secrets.TESTING_PIPELINE_EXECUTION_ROLE }}
-  TESTING_CLOUDFORMATION_EXECUTION_ROLE: ${{ secrets.TESTING_CLOUDFORMATION_EXECUTION_ROLE }}
-  TESTING_ARTIFACTS_BUCKET: ${{ secrets.TESTING_ARTIFACTS_BUCKET }}
-  TESTING_IMAGE_REPOSITORY: ${{ secrets.TESTING_IMAGE_REPOSITORY }}
-  TESTING_REGION: ap-south-1
-  PROD_STACK_NAME: ${{ secrets.PROD_STACK_NAME }}
-  PROD_PIPELINE_EXECUTION_ROLE: ${{ secrets.PROD_PIPELINE_EXECUTION_ROLE }}
-  PROD_CLOUDFORMATION_EXECUTION_ROLE: ${{ secrets.PROD_CLOUDFORMATION_EXECUTION_ROLE }}
-  PROD_ARTIFACTS_BUCKET: ${{ secrets.PROD_ARTIFACTS_BUCKET }}
-  PROD_IMAGE_REPOSITORY: ${{ secrets.PROD_IMAGE_REPOSITORY }}
-  PROD_REGION: ap-south-1
+  REGION: ap-south-1
 
 jobs:
-  build-and-package-testing:
-    if: github.ref == 'refs/heads/develop'
-    runs-on: ubuntu-latest
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-      - uses: aws-actions/setup-sam@v1
-
-      - name: Build resources
-        run: sam build --template ${SAM_TEMPLATE} --use-container
-
-      - name: Assume the testing pipeline user role
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID_TESTING }}
-          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY_TESTING }}
-          aws-region: ${{ env.TESTING_REGION }}
-          role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: testing-packaging
-          role-duration-seconds: 3600
-          role-skip-session-tagging: true
-
-      - name: Upload artifacts to testing artifact buckets
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@v3.x
+      - name: Prepare Outputs
+        id: prepare-step
         run: |
-          sam package \
-            --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
-            --image-repository ${TESTING_IMAGE_REPOSITORY} \
-            --region ${TESTING_REGION} \
-            --output-template-file packaged-testing.yaml
-      - uses: actions/upload-artifact@v2
-        with:
-          name: packaged-testing.yaml
-          path: packaged-testing.yaml
+          echo "::set-output name=aws_access_key_id_name::AWS_ACCESS_KEY_ID_${GITHUB_REF_SLUG^^}";
+          echo "::set-output name=aws_secret_access_key_name::AWS_SECRET_ACCESS_KEY_${GITHUB_REF_SLUG^^}";
+          echo "::set-output name=stack_name::STACK_NAME_${GITHUB_REF_SLUG^^}";
+          echo "::set-output name=pipeline_execution_role_name::PIPELINE_EXECUTION_ROLE_${GITHUB_REF_SLUG^^}";
+          echo "::set-output name=cloudformation_execution_role_name::CLOUDFORMATION_EXECUTION_ROLE_${GITHUB_REF_SLUG^^}";
+          echo "::set-output name=artifacts_bucket_name::ARTIFACTS_BUCKET_${GITHUB_REF_SLUG^^}";
+          echo "::set-output name=image_repository_name::IMAGE_REPOSITORY_${GITHUB_REF_SLUG^^}";
+    outputs:
+      aws_access_key_id_name: ${{ steps.prepare-step.outputs.aws_access_key_id_name }}
+      aws_secret_access_key_name: ${{ steps.prepare-step.outputs.aws_secret_access_key_name }}
+      stack_name: ${{ steps.prepare-step.outputs.stack_name }}
+      pipeline_execution_role_name: ${{ steps.prepare-step.outputs.pipeline_execution_role_name }}
+      cloudformation_execution_role_name: ${{ steps.prepare-step.outputs.cloudformation_execution_role_name }}
+      artifacts_bucket_name: ${{ steps.prepare-step.outputs.artifacts_bucket_name }}
+      image_repository_name: ${{ steps.prepare-step.outputs.image_repository_name }}
 
   build-and-package:
-    if: github.ref == 'refs/heads/main'
+    needs: [prepare]
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID_NAME: ${{ needs.prepare.outputs.aws_access_key_id_name }}
+      AWS_SECRET_ACCESS_KEY_NAME: ${{ needs.prepare.outputs.aws_secret_access_key_name }}
+      PIPELINE_EXECUTION_ROLE_NAME: ${{ needs.prepare.outputs.pipeline_execution_role_name }}
+      ARTIFACTS_BUCKET_NAME: ${{ needs.prepare.outputs.artifacts_bucket_name }}
+      IMAGE_REPOSITORY_NAME: ${{ needs.prepare.outputs.image_repository_name }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -71,95 +54,83 @@ jobs:
       - name: Build resources
         run: sam build --template ${SAM_TEMPLATE} --use-container
 
-      - name: Assume the prod pipeline user role
+      - name: Assume the pipeline user role
+        env:
+          PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets[env.AWS_ACCESS_KEY_ID_NAME] }}
+          PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets[env.AWS_SECRET_ACCESS_KEY_NAME] }}
+          PIPELINE_EXECUTION_ROLE: ${{ secrets[env.PIPELINE_EXECUTION_ROLE_NAME] }}
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID_PROD }}
-          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY_PROD }}
-          aws-region: ${{ env.PROD_REGION }}
-          role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: prod-packaging
+          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.REGION }}
+          role-to-assume: ${{ env.PIPELINE_EXECUTION_ROLE }}
+          role-session-name: packaging
           role-duration-seconds: 3600
           role-skip-session-tagging: true
 
-      - name: Upload artifacts to production artifact buckets
+      - name: Upload artifacts to artifact buckets
+        env:
+          ARTIFACTS_BUCKET: ${{ secrets[env.ARTIFACTS_BUCKET_NAME] }}
+          IMAGE_REPOSITORY: ${{ secrets[env.IMAGE_REPOSITORY_NAME] }}
         run: |
           sam package \
-            --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
-            --image-repository ${PROD_IMAGE_REPOSITORY} \
-            --region ${PROD_REGION} \
-            --output-template-file packaged-prod.yaml
+            --s3-bucket ${ARTIFACTS_BUCKET} \
+            --image-repository ${IMAGE_REPOSITORY} \
+            --region ${REGION} \
+            --output-template-file packaged.yaml
       - uses: actions/upload-artifact@v2
         with:
-          name: packaged-prod.yaml
-          path: packaged-prod.yaml
+          name: packaged.yaml
+          path: packaged.yaml
 
-  deploy-testing:
-    if: github.ref == 'refs/heads/develop'
-    needs: [build-and-package-testing]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-      - uses: aws-actions/setup-sam@v1
-      - uses: actions/download-artifact@v2
-        with:
-          name: packaged-testing.yaml
-
-      - name: Assume the testing pipeline user role
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID_TESTING }}
-          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY_TESTING }}
-          aws-region: ${{ env.TESTING_REGION }}
-          role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: testing-deployment
-          role-duration-seconds: 3600
-          role-skip-session-tagging: true
-
-      - name: Deploy to testing account
-        run: |
-          sam deploy --stack-name ${TESTING_STACK_NAME} \
-            --no-confirm-changeset \
-            --template packaged-testing.yaml \
-            --capabilities CAPABILITY_IAM \
-            --region ${TESTING_REGION} \
-            --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
-            --image-repository ${TESTING_IMAGE_REPOSITORY} \
-            --no-fail-on-empty-changeset \
-            --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
-
-  deploy-prod:
-    if: github.ref == 'refs/heads/main'
+  deploy:
     needs: [build-and-package]
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID_NAME: ${{ needs.prepare.outputs.aws_access_key_id_name }}
+      AWS_SECRET_ACCESS_KEY_NAME: ${{ needs.prepare.outputs.aws_secret_access_key_name }}
+      STACK_NAME: ${{ needs.prepare.outputs.stack_name }}
+      PIPELINE_EXECUTION_ROLE_NAME: ${{ needs.prepare.outputs.pipeline_execution_role_name }}
+      CLOUDFORMATION_EXECUTION_ROLE_NAME: ${{ needs.prepare.outputs.cloudformation_execution_role_name }}
+      ARTIFACTS_BUCKET_NAME: ${{ needs.prepare.outputs.artifacts_bucket_name }}
+      IMAGE_REPOSITORY_NAME: ${{ needs.prepare.outputs.image_repository_name }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
       - uses: aws-actions/setup-sam@v1
       - uses: actions/download-artifact@v2
         with:
-          name: packaged-prod.yaml
+          name: packaged.yaml
 
-      - name: Assume the prod pipeline user role
+      - name: Assume the pipeline user role
+        env:
+          PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets[env.AWS_ACCESS_KEY_ID_NAME] }}
+          PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets[env.AWS_SECRET_ACCESS_KEY_NAME] }}
+          PIPELINE_EXECUTION_ROLE: ${{ secrets[env.PIPELINE_EXECUTION_ROLE_NAME] }}
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID_PROD }}
-          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY_PROD }}
-          aws-region: ${{ env.PROD_REGION }}
-          role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: prod-deployment
+          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.REGION }}
+          role-to-assume: ${{ env.PIPELINE_EXECUTION_ROLE }}
+          role-session-name: deployment
           role-duration-seconds: 3600
           role-skip-session-tagging: true
 
-      - name: Deploy to production account
+      - name: Deploy to account
+        env:
+          ARTIFACTS_BUCKET: ${{ secrets[env.ARTIFACTS_BUCKET_NAME] }}
+          IMAGE_REPOSITORY: ${{ secrets[env.IMAGE_REPOSITORY_NAME] }}
+          CLOUDFORMATION_EXECUTION_ROLE: ${{ secrets[env.CLOUDFORMATION_EXECUTION_ROLE_NAME] }}
+          PIPELINE_STACK_NAME: ${{ secrets[env.STACK_NAME] }}
         run: |
-          sam deploy --stack-name ${PROD_STACK_NAME} \
+          sam deploy --stack-name ${PIPELINE_STACK_NAME} \
             --no-confirm-changeset \
-            --template packaged-prod.yaml \
+            --template packaged.yaml \
             --capabilities CAPABILITY_IAM \
-            --region ${PROD_REGION} \
-            --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
-            --image-repository ${PROD_IMAGE_REPOSITORY} \
+            --region ${REGION} \
+            --s3-bucket ${ARTIFACTS_BUCKET} \
+            --image-repository ${IMAGE_REPOSITORY} \
             --no-fail-on-empty-changeset \
-            --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}
+            --role-arn ${CLOUDFORMATION_EXECUTION_ROLE}
