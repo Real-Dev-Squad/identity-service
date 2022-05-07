@@ -85,7 +85,7 @@ jobs:
           path: packaged.yaml
 
   deploy:
-    needs: [build-and-package]
+    needs: [prepare, build-and-package]
     runs-on: ubuntu-latest
     env:
       AWS_ACCESS_KEY_ID_NAME: ${{ needs.prepare.outputs.aws_access_key_id_name }}
