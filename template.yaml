@@ -44,7 +44,7 @@ Resources:
         ScheduledEvent:
           Type: Schedule
           Properties:
-            Schedule: cron(0 0 18 ? * WED *)
+            Schedule: cron(0 18 ? * WED *)
             Enabled: True
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
