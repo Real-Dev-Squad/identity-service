@@ -7,83 +7,27 @@ on:
       - 'develop'
 
 env:
-  PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   SAM_TEMPLATE: template.yaml
-  TESTING_STACK_NAME: identity-service-development-sam-app-stack
-  TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::181388287005:role/aws-sam-cli-managed-developm-PipelineExecutionRole-AYJ6NGOV5SCK
-  TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::181388287005:role/aws-sam-cli-managed-devel-CloudFormationExecutionR-1U9PFQ77R0C97
-  TESTING_ARTIFACTS_BUCKET: aws-sam-cli-managed-development-p-artifactsbucket-l1p3nx5osf5y
-  TESTING_IMAGE_REPOSITORY: 181388287005.dkr.ecr.ap-south-1.amazonaws.com/aws-sam-cli-managed-development-pipeline-resources-imagerepository-npil4x4nfuva
-  TESTING_REGION: ap-south-1
-  PROD_STACK_NAME: identity-service-production-sam-app-stack
-  PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::181388287005:role/aws-sam-cli-managed-producti-PipelineExecutionRole-FT735QEDMFXI
-  PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::181388287005:role/aws-sam-cli-managed-produ-CloudFormationExecutionR-9CH99RIJ1ZXS
-  PROD_ARTIFACTS_BUCKET: aws-sam-cli-managed-production-pi-artifactsbucket-zja49ur4rxir
-  PROD_IMAGE_REPOSITORY: 181388287005.dkr.ecr.ap-south-1.amazonaws.com/aws-sam-cli-managed-production-pipeline-resources-imagerepository-lmq9awi4ye5h
-  PROD_REGION: ap-south-1
 
 jobs:
-  build-and-package-testing:
-    if: github.ref == 'refs/heads/develop'
-    runs-on: ubuntu-latest
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-      - uses: aws-actions/setup-sam@v1
-
-      - name: Build resources
-        run: sam build --template ${SAM_TEMPLATE} --use-container
-
-      - name: Assume the testing pipeline user role
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.TESTING_REGION }}
-          role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: testing-packaging
-          role-duration-seconds: 3600
-          role-skip-session-tagging: true
-
-      - name: Upload artifacts to testing artifact buckets
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@v3.x
+      - name: Prepare Outputs
+        id: prepare-step
         run: |
-          sam package \
-            --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
-            --image-repository ${TESTING_IMAGE_REPOSITORY} \
-            --region ${TESTING_REGION} \
-            --output-template-file packaged-testing.yaml
-      - uses: actions/upload-artifact@v2
-        with:
-          name: packaged-testing.yaml
-          path: packaged-testing.yaml
-
-      - name: Assume the prod pipeline user role
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.PROD_REGION }}
-          role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: prod-packaging
-          role-duration-seconds: 3600
-          role-skip-session-tagging: true
-
-      - name: Upload artifacts to production artifact buckets
-        run: |
-          sam package \
-            --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
-            --image-repository ${PROD_IMAGE_REPOSITORY} \
-            --region ${PROD_REGION} \
-            --output-template-file packaged-prod.yaml
-      - uses: actions/upload-artifact@v2
-        with:
-          name: packaged-prod.yaml
-          path: packaged-prod.yaml
+          echo "::set-output name=branch_name::${GITHUB_REF_SLUG}";
+    outputs:
+      branch_name: ${{ steps.prepare-step.outputs.branch_name }}
 
   build-and-package:
-    if: github.ref == 'refs/heads/main'
+    needs: [prepare]
     runs-on: ubuntu-latest
+    environment: ${{ needs.prepare.outputs.branch_name }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -92,118 +36,80 @@ jobs:
       - name: Build resources
         run: sam build --template ${SAM_TEMPLATE} --use-container
 
-      - name: Assume the testing pipeline user role
+      - name: Assume the pipeline user role
+        env:
+          PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PIPELINE_EXECUTION_ROLE: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+          REGION: ${{ secrets.REGION }}
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.TESTING_REGION }}
-          role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: testing-packaging
+          aws-region: ${{ env.REGION }}
+          role-to-assume: ${{ env.PIPELINE_EXECUTION_ROLE }}
+          role-session-name: packaging
           role-duration-seconds: 3600
           role-skip-session-tagging: true
 
-      - name: Upload artifacts to testing artifact buckets
+      - name: Upload artifacts to artifact buckets
+        env:
+          ARTIFACTS_BUCKET: ${{ secrets.ARTIFACTS_BUCKET }}
+          IMAGE_REPOSITORY: ${{ secrets.IMAGE_REPOSITORY }}
+          REGION: ${{ secrets.REGION }}
         run: |
           sam package \
-            --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
-            --image-repository ${TESTING_IMAGE_REPOSITORY} \
-            --region ${TESTING_REGION} \
-            --output-template-file packaged-testing.yaml
+            --s3-bucket ${ARTIFACTS_BUCKET} \
+            --image-repository ${IMAGE_REPOSITORY} \
+            --region ${REGION} \
+            --output-template-file packaged.yaml
       - uses: actions/upload-artifact@v2
         with:
-          name: packaged-testing.yaml
-          path: packaged-testing.yaml
+          name: packaged.yaml
+          path: packaged.yaml
 
-      - name: Assume the prod pipeline user role
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.PROD_REGION }}
-          role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: prod-packaging
-          role-duration-seconds: 3600
-          role-skip-session-tagging: true
-
-      - name: Upload artifacts to production artifact buckets
-        run: |
-          sam package \
-            --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
-            --image-repository ${PROD_IMAGE_REPOSITORY} \
-            --region ${PROD_REGION} \
-            --output-template-file packaged-prod.yaml
-      - uses: actions/upload-artifact@v2
-        with:
-          name: packaged-prod.yaml
-          path: packaged-prod.yaml
-
-  deploy-testing:
-    if: github.ref == 'refs/heads/develop'
-    needs: [build-and-package-testing]
+  deploy:
+    needs: [prepare, build-and-package]
     runs-on: ubuntu-latest
+    environment: ${{ needs.prepare.outputs.branch_name }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
       - uses: aws-actions/setup-sam@v1
       - uses: actions/download-artifact@v2
         with:
-          name: packaged-testing.yaml
+          name: packaged.yaml
 
-      - name: Assume the testing pipeline user role
+      - name: Assume the pipeline user role
+        env:
+          PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PIPELINE_EXECUTION_ROLE: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+          REGION: ${{ secrets.REGION }}
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.TESTING_REGION }}
-          role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: testing-deployment
+          aws-region: ${{ env.REGION }}
+          role-to-assume: ${{ env.PIPELINE_EXECUTION_ROLE }}
+          role-session-name: deployment
           role-duration-seconds: 3600
           role-skip-session-tagging: true
 
-      - name: Deploy to testing account
+      - name: Deploy to account
+        env:
+          ARTIFACTS_BUCKET: ${{ secrets.ARTIFACTS_BUCKET }}
+          IMAGE_REPOSITORY: ${{ secrets.IMAGE_REPOSITORY }}
+          CLOUDFORMATION_EXECUTION_ROLE: ${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}
+          PIPELINE_STACK_NAME: ${{ secrets.STACK_NAME }}
+          REGION: ${{ secrets.REGION }}
         run: |
-          sam deploy --stack-name ${TESTING_STACK_NAME} \
+          sam deploy --stack-name ${PIPELINE_STACK_NAME} \
             --no-confirm-changeset \
-            --template packaged-testing.yaml \
+            --template packaged.yaml \
             --capabilities CAPABILITY_IAM \
-            --region ${TESTING_REGION} \
-            --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
-            --image-repository ${TESTING_IMAGE_REPOSITORY} \
+            --region ${REGION} \
+            --s3-bucket ${ARTIFACTS_BUCKET} \
+            --image-repository ${IMAGE_REPOSITORY} \
             --no-fail-on-empty-changeset \
-            --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
-
-  deploy-prod:
-    if: github.ref == 'refs/heads/main'
-    needs: [build-and-package]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-      - uses: aws-actions/setup-sam@v1
-      - uses: actions/download-artifact@v2
-        with:
-          name: packaged-prod.yaml
-
-      - name: Assume the prod pipeline user role
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ env.PIPELINE_USER_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.PROD_REGION }}
-          role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: prod-deployment
-          role-duration-seconds: 3600
-          role-skip-session-tagging: true
-
-      - name: Deploy to production account
-        run: |
-          sam deploy --stack-name ${PROD_STACK_NAME} \
-            --no-confirm-changeset \
-            --template packaged-prod.yaml \
-            --capabilities CAPABILITY_IAM \
-            --region ${PROD_REGION} \
-            --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
-            --image-repository ${PROD_IMAGE_REPOSITORY} \
-            --no-fail-on-empty-changeset \
-            --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}
+            --role-arn ${CLOUDFORMATION_EXECUTION_ROLE}
