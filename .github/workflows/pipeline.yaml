@@ -8,7 +8,6 @@ on:
 
 env:
   SAM_TEMPLATE: template.yaml
-  REGION: ap-south-1
 
 jobs:
   prepare:
@@ -21,31 +20,14 @@ jobs:
       - name: Prepare Outputs
         id: prepare-step
         run: |
-          echo "::set-output name=aws_access_key_id_name::AWS_ACCESS_KEY_ID_${GITHUB_REF_SLUG^^}";
-          echo "::set-output name=aws_secret_access_key_name::AWS_SECRET_ACCESS_KEY_${GITHUB_REF_SLUG^^}";
-          echo "::set-output name=stack_name::STACK_NAME_${GITHUB_REF_SLUG^^}";
-          echo "::set-output name=pipeline_execution_role_name::PIPELINE_EXECUTION_ROLE_${GITHUB_REF_SLUG^^}";
-          echo "::set-output name=cloudformation_execution_role_name::CLOUDFORMATION_EXECUTION_ROLE_${GITHUB_REF_SLUG^^}";
-          echo "::set-output name=artifacts_bucket_name::ARTIFACTS_BUCKET_${GITHUB_REF_SLUG^^}";
-          echo "::set-output name=image_repository_name::IMAGE_REPOSITORY_${GITHUB_REF_SLUG^^}";
+          echo "::set-output name=branch_name::${GITHUB_REF_SLUG}";
     outputs:
-      aws_access_key_id_name: ${{ steps.prepare-step.outputs.aws_access_key_id_name }}
-      aws_secret_access_key_name: ${{ steps.prepare-step.outputs.aws_secret_access_key_name }}
-      stack_name: ${{ steps.prepare-step.outputs.stack_name }}
-      pipeline_execution_role_name: ${{ steps.prepare-step.outputs.pipeline_execution_role_name }}
-      cloudformation_execution_role_name: ${{ steps.prepare-step.outputs.cloudformation_execution_role_name }}
-      artifacts_bucket_name: ${{ steps.prepare-step.outputs.artifacts_bucket_name }}
-      image_repository_name: ${{ steps.prepare-step.outputs.image_repository_name }}
+      branch_name: ${{ steps.prepare-step.outputs.branch_name }}
 
   build-and-package:
     needs: [prepare]
     runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID_NAME: ${{ needs.prepare.outputs.aws_access_key_id_name }}
-      AWS_SECRET_ACCESS_KEY_NAME: ${{ needs.prepare.outputs.aws_secret_access_key_name }}
-      PIPELINE_EXECUTION_ROLE_NAME: ${{ needs.prepare.outputs.pipeline_execution_role_name }}
-      ARTIFACTS_BUCKET_NAME: ${{ needs.prepare.outputs.artifacts_bucket_name }}
-      IMAGE_REPOSITORY_NAME: ${{ needs.prepare.outputs.image_repository_name }}
+    environment: ${{ needs.prepare.outputs.branch_name }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -56,9 +38,10 @@ jobs:
 
       - name: Assume the pipeline user role
         env:
-          PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets[env.AWS_ACCESS_KEY_ID_NAME] }}
-          PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets[env.AWS_SECRET_ACCESS_KEY_NAME] }}
-          PIPELINE_EXECUTION_ROLE: ${{ secrets[env.PIPELINE_EXECUTION_ROLE_NAME] }}
+          PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PIPELINE_EXECUTION_ROLE: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+          REGION: ${{ secrets.REGION }}
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
@@ -71,8 +54,9 @@ jobs:
 
       - name: Upload artifacts to artifact buckets
         env:
-          ARTIFACTS_BUCKET: ${{ secrets[env.ARTIFACTS_BUCKET_NAME] }}
-          IMAGE_REPOSITORY: ${{ secrets[env.IMAGE_REPOSITORY_NAME] }}
+          ARTIFACTS_BUCKET: ${{ secrets.ARTIFACTS_BUCKET }}
+          IMAGE_REPOSITORY: ${{ secrets.IMAGE_REPOSITORY }}
+          REGION: ${{ secrets.REGION }}
         run: |
           sam package \
             --s3-bucket ${ARTIFACTS_BUCKET} \
@@ -87,14 +71,7 @@ jobs:
   deploy:
     needs: [prepare, build-and-package]
     runs-on: ubuntu-latest
-    env:
-      AWS_ACCESS_KEY_ID_NAME: ${{ needs.prepare.outputs.aws_access_key_id_name }}
-      AWS_SECRET_ACCESS_KEY_NAME: ${{ needs.prepare.outputs.aws_secret_access_key_name }}
-      STACK_NAME: ${{ needs.prepare.outputs.stack_name }}
-      PIPELINE_EXECUTION_ROLE_NAME: ${{ needs.prepare.outputs.pipeline_execution_role_name }}
-      CLOUDFORMATION_EXECUTION_ROLE_NAME: ${{ needs.prepare.outputs.cloudformation_execution_role_name }}
-      ARTIFACTS_BUCKET_NAME: ${{ needs.prepare.outputs.artifacts_bucket_name }}
-      IMAGE_REPOSITORY_NAME: ${{ needs.prepare.outputs.image_repository_name }}
+    environment: ${{ needs.prepare.outputs.branch_name }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -105,9 +82,10 @@ jobs:
 
       - name: Assume the pipeline user role
         env:
-          PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets[env.AWS_ACCESS_KEY_ID_NAME] }}
-          PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets[env.AWS_SECRET_ACCESS_KEY_NAME] }}
-          PIPELINE_EXECUTION_ROLE: ${{ secrets[env.PIPELINE_EXECUTION_ROLE_NAME] }}
+          PIPELINE_USER_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          PIPELINE_USER_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PIPELINE_EXECUTION_ROLE: ${{ secrets.PIPELINE_EXECUTION_ROLE }}
+          REGION: ${{ secrets.REGION }}
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ env.PIPELINE_USER_ACCESS_KEY_ID }}
@@ -120,10 +98,11 @@ jobs:
 
       - name: Deploy to account
         env:
-          ARTIFACTS_BUCKET: ${{ secrets[env.ARTIFACTS_BUCKET_NAME] }}
-          IMAGE_REPOSITORY: ${{ secrets[env.IMAGE_REPOSITORY_NAME] }}
-          CLOUDFORMATION_EXECUTION_ROLE: ${{ secrets[env.CLOUDFORMATION_EXECUTION_ROLE_NAME] }}
-          PIPELINE_STACK_NAME: ${{ secrets[env.STACK_NAME] }}
+          ARTIFACTS_BUCKET: ${{ secrets.ARTIFACTS_BUCKET }}
+          IMAGE_REPOSITORY: ${{ secrets.IMAGE_REPOSITORY }}
+          CLOUDFORMATION_EXECUTION_ROLE: ${{ secrets.CLOUDFORMATION_EXECUTION_ROLE }}
+          PIPELINE_STACK_NAME: ${{ secrets.STACK_NAME }}
+          REGION: ${{ secrets.REGION }}
         run: |
           sam deploy --stack-name ${PIPELINE_STACK_NAME} \
             --no-confirm-changeset \
