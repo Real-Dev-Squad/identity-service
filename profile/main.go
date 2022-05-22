@@ -182,6 +182,25 @@ func logHealth(client *firestore.Client, ctx context.Context, userId string, isS
 }
 
 /*
+ Logs the status of the user's profileDiff
+*/
+func logSameProfileDiffGenerated(client *firestore.Client, ctx context.Context, userId string, profileDiffId string) {
+	newLog := Log{
+		Type:      "SAME_PROFILE_DIFF",
+		Timestamp: time.Now(),
+		Meta: map[string]interface{}{
+			"userId":        userId,
+			"profileDiffId": profileDiffId,
+		},
+		Body: map[string]interface{}{
+			"userId":        userId,
+			"profileDiffId": profileDiffId,
+		},
+	}
+	client.Collection("logs").Add(ctx, newLog)
+}
+
+/*
  Function for setting the profileStatus in user object in firestore
 */
 func setProfileStatus(client *firestore.Client, ctx context.Context, userId string, status string) {
@@ -215,8 +234,8 @@ func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId st
 /*
  Get the last profile diff of the user
 */
-func getLastDiff(client *firestore.Client, ctx context.Context, userId string) (Res, string) {
-	query := client.Collection("profileDiffs").Where("userId", "==", userId).Where("approval", "==", "PENDING").OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
+func getLastDiff(client *firestore.Client, ctx context.Context, userId string, approval string) (Res, string) {
+	query := client.Collection("profileDiffs").Where("userId", "==", userId).Where("approval", "==", approval).OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
 	var lastdiff Diff
 	var lastdiffId string
 	for {
@@ -282,16 +301,21 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	var res Res
 	json.Unmarshal([]byte(r), &res)
 
-	lastdiff, lastdiffId := getLastDiff(client, ctx, userId)
+	lastPendingDiff, lastPendingDiffId := getLastDiff(client, ctx, userId, "PENDING")
 	userData := getUserData(client, ctx, userId)
-	if lastdiff != res && userData != res {
-		if lastdiffId != "" {
-			setNotApproved(client, ctx, lastdiffId)
+	if lastPendingDiff != res && userData != res {
+		if lastPendingDiffId != "" {
+			setNotApproved(client, ctx, lastPendingDiffId)
 		}
-		generateAndStoreDiff(client, ctx, res, userId)
+		lastRejectedDiff, lastRejectedDiffId := getLastDiff(client, ctx, userId, "NOT APPROVED")
+		if lastRejectedDiff != res {
+			generateAndStoreDiff(client, ctx, res, userId)
+		} else {
+			logSameProfileDiffGenerated(client, ctx, userId, lastRejectedDiffId)
+		}
 	} else if userData == res {
-		if lastdiffId != "" {
-			setNotApproved(client, ctx, lastdiffId)
+		if lastPendingDiffId != "" {
+			setNotApproved(client, ctx, lastPendingDiffId)
 		}
 	}
 
