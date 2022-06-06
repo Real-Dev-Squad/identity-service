@@ -15,7 +15,7 @@ We are using AWS SAM(Serverless Application Model) with [golang](https://go.dev/
 ```
 /profile
 /verify
-/healthcheck
+/healthCheck
 ```
 
 ## How to start ?
