@@ -13,9 +13,9 @@ We are using AWS SAM(Serverless Application Model) with [golang](https://go.dev/
 #### Routes Created
 
 ```
-/getData
+/profile
 /verify
-/health-check
+/healthCheck
 ```
 
 ## How to start ?
@@ -31,6 +31,7 @@ You should have some things pre-installed -
 
 - Create an application on [FireStore](https://firebase.google.com/docs/firestore) and [generate a service file](https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
 - Add the service file credentials in the sample-env.json file as a string.
+- Rename `sample-env.json` to `env.json`
 - Remove all the spaces such that the whole _json_ that you copied is in a single line
 - Replace **\n** with **\\\\n** in your copied json
 - Replace **"** with **\\"** in your copied json
