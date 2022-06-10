@@ -1,11 +1,10 @@
 package main
 
 import (
-	// "errors"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -57,7 +56,7 @@ type Diff struct {
 	LastName    string    `firestore:"last_name,omitempty"`
 	Email       string    `firestore:"email,omitempty"`
 	Phone       string    `firestore:"phone,omitempty"`
-	YOE         int       `firestore:"yoe,omitempty"`
+	YOE         int       `firestore:"yoe"`
 	Company     string    `firestore:"company,omitempty"`
 	Designation string    `firestore:"designation,omitempty"`
 	GithubId    string    `firestore:"github_id,omitempty"`
@@ -110,6 +109,26 @@ func resToDiff(res Res, userId string) Diff {
 		TwitterId:   res.TwitterId,
 		InstagramId: res.InstagramId,
 		Website:     res.Website,
+	}
+}
+
+func diffToMap(diff Diff) map[string]interface{} {
+	return map[string]interface{}{
+		"userId":       diff.UserId,
+		"timestamp":    diff.Timestamp,
+		"approval":     diff.Approval,
+		"first_name":   diff.FirstName,
+		"last_name":    diff.LastName,
+		"email":        diff.Email,
+		"phone":        diff.Phone,
+		"yoe":          diff.YOE,
+		"company":      diff.Company,
+		"designation":  diff.Designation,
+		"github_id":    diff.GithubId,
+		"linkedin_id":  diff.LinkedIn,
+		"twitter_id":   diff.TwitterId,
+		"instagram_id": diff.InstagramId,
+		"website":      diff.Website,
 	}
 }
 
@@ -295,7 +314,7 @@ func getUserData(client *firestore.Client, ctx context.Context, userId string) R
 */
 func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string) {
 	var diff Diff = resToDiff(res, userId)
-	_, _, err := client.Collection("profileDiffs").Add(ctx, diff)
+	_, _, err := client.Collection("profileDiffs").Add(ctx, diffToMap(diff))
 	if err != nil {
 		log.Fatal(err)
 	} else {
@@ -315,18 +334,15 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		log.Fatal(err)
 	}
 
-	postBody, _ := json.Marshal(map[string]string{
-		"hash": string(hashedChaincode),
-	})
-
-	reqBody := bytes.NewBuffer(postBody)
-
-	resp, err := http.Post(userUrl, "application/json", reqBody)
+	httpClient := &http.Client{}
+	req, _ := http.NewRequest("GET", userUrl, nil)
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", string(hashedChaincode)))
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if resp.StatusCode == 401 {
+	if resp.StatusCode == 403 {
 		return "", errors.New("unauthenticated access")
 	}
 
