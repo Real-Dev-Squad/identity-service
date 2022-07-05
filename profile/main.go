@@ -109,6 +109,26 @@ func resToDiff(res Res, userId string) Diff {
 	}
 }
 
+func diffToMap(diff Diff) map[string]interface{} {
+	return map[string]interface{}{
+		"userId":       diff.UserId,
+		"timestamp":    diff.Timestamp,
+		"approval":     diff.Approval,
+		"first_name":   diff.FirstName,
+		"last_name":    diff.LastName,
+		"email":        diff.Email,
+		"phone":        diff.Phone,
+		"yoe":          diff.YOE,
+		"company":      diff.Company,
+		"designation":  diff.Designation,
+		"github_id":    diff.GithubId,
+		"linkedin_id":  diff.LinkedIn,
+		"twitter_id":   diff.TwitterId,
+		"instagram_id": diff.InstagramId,
+		"website":      diff.Website,
+	}
+}
+
 /*
  Setting Firestore Key for development/production
 */
@@ -168,7 +188,7 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 */
 func logHealth(client *firestore.Client, ctx context.Context, userId string, isServiceRunning bool) {
 	newLog := Log{
-		Type:      "PROFILE_HEALTH",
+		Type:      "PROFILE_SERVICE_HEALTH",
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
@@ -184,17 +204,30 @@ func logHealth(client *firestore.Client, ctx context.Context, userId string, isS
 /*
  Logs the status of the user's profileDiff
 */
-func logSameProfileDiffGenerated(client *firestore.Client, ctx context.Context, userId string, profileDiffId string) {
+func logProfileSkipped(client *firestore.Client, ctx context.Context, userId string, reason string) {
 	newLog := Log{
-		Type:      "SAME_PROFILE_DIFF",
+		Type:      "PROFILE_SKIPPED",
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
-			"userId":        userId,
-			"profileDiffId": profileDiffId,
+			"userId": userId,
 		},
 		Body: map[string]interface{}{
-			"userId":        userId,
-			"profileDiffId": profileDiffId,
+			"userId": userId,
+			"reason": reason,
+		},
+	}
+	client.Collection("logs").Add(ctx, newLog)
+}
+
+func logProfileStored(client *firestore.Client, ctx context.Context, userId string) {
+	newLog := Log{
+		Type:      "PROFILE_DIFF_STORED",
+		Timestamp: time.Now(),
+		Meta: map[string]interface{}{
+			"userId": userId,
+		},
+		Body: map[string]interface{}{
+			"userId": userId,
 		},
 	}
 	client.Collection("logs").Add(ctx, newLog)
@@ -203,20 +236,20 @@ func logSameProfileDiffGenerated(client *firestore.Client, ctx context.Context, 
 /*
  Function for setting the profileStatus in user object in firestore
 */
-func setProfileStatus(client *firestore.Client, ctx context.Context, userId string, status string) {
+func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string) {
 	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
-		"profileStatus": status,
+		"profileStatus": "BLOCKED",
 	}, firestore.MergeAll)
 
 	newLog := Log{
-		Type:      "PROFILE_BLOCKED",
+		Type:      "PROFILE_SERVICE_BLOCKED",
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
 		},
 		Body: map[string]interface{}{
 			"userId": userId,
-			"reason": "service not running",
+			"reason": reason,
 		},
 	}
 	client.Collection("logs").Add(ctx, newLog)
@@ -277,9 +310,11 @@ func getUserData(client *firestore.Client, ctx context.Context, userId string) R
 */
 func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string) {
 	var diff Diff = resToDiff(res, userId)
-	_, _, err := client.Collection("profileDiffs").Add(ctx, diff)
+	_, _, err := client.Collection("profileDiffs").Add(ctx, diffToMap(diff))
 	if err != nil {
 		log.Fatal(err)
+	} else {
+		logProfileStored(client, ctx, userId)
 	}
 }
 
@@ -311,7 +346,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		if lastRejectedDiff != res {
 			generateAndStoreDiff(client, ctx, res, userId)
 		} else {
-			logSameProfileDiffGenerated(client, ctx, userId, lastRejectedDiffId)
+			logProfileSkipped(client, ctx, userId, "Last Pending Diff is same as New Profile Data. ID: "+lastRejectedDiffId)
 		}
 	} else if userData == res {
 		if lastPendingDiffId != "" {
@@ -361,7 +396,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 		logHealth(client, ctx, userId, isServiceRunning)
 		if !isServiceRunning {
-			setProfileStatus(client, ctx, userId, "BLOCKED")
+			setProfileStatusBlocked(client, ctx, userId, "BLOCKED")
 			newChaincode := Chaincode{
 				UserId:    userId,
 				Timestamp: time.Now(),
