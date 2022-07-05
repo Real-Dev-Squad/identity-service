@@ -18,6 +18,9 @@ We are using AWS SAM(Serverless Application Model) with [golang](https://go.dev/
 /healthCheck
 ```
 
+### Sequence Diagram of Identity Service
+![](https://user-images.githubusercontent.com/45519620/176491640-6f58d7d5-6fe1-42d9-a9d6-fc1b23e0dee2.jpg)
+
 ## How to start ?
 
 You should have some things pre-installed -
