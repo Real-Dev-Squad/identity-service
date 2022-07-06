@@ -1,7 +1,7 @@
 package main
 
 import (
-	// "errors"
+	"fmt"
 	"context"
 	"encoding/json"
 	"io/ioutil"
@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
@@ -323,11 +324,23 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
 */
 func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string) {
 	userUrl = userUrl + "profile"
-	resp, err := http.Get(userUrl)
+	hashedChaincode, err := bcrypt.GenerateFromPassword([]byte(chaincode), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	httpClient := &http.Client{}
+	req, _ := http.NewRequest("GET", userUrl, nil)
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", string(hashedChaincode)))
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == 401{
+		return 
+	}
 
 	r, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
