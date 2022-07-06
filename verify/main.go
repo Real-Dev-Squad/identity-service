@@ -105,7 +105,7 @@ func logVerification(client *firestore.Client, ctx context.Context, status strin
 		logtype = "PROFILE_BLOCKED"
 		logbody = map[string]interface{}{
 			"userId": userId,
-			"reason": "chaincode not linked",
+			"reason": "Chaincode not linked. Hash sent by service is not verified.",
 		}
 		newChaincode := Chaincode{
 			UserId:    userId,
