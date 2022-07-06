@@ -322,7 +322,7 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
 /*
  Getting data from the user's service
 */
-func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string) {
+func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string) {
 	userUrl = userUrl + "profile"
 	hashedChaincode, err := bcrypt.GenerateFromPassword([]byte(chaincode), bcrypt.DefaultCost)
 	if err != nil {
@@ -391,11 +391,18 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}
 		var userId string = doc.Ref.ID
 		var userUrl string
+		var chaincode string
+		
 		if str, ok := doc.Data()["profileURL"].(string); ok {
 			userUrl = str
 		} else {
 			continue
 		}
+
+		if str, ok := doc.Data()["chaincode"].(string); ok {
+			chaincode = str
+		}
+
 		if userUrl[len(userUrl)-1] != '/' {
 			userUrl = userUrl + "/"
 		}
@@ -418,7 +425,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 			continue
 		}
 
-		getdata(client, ctx, userId, userUrl)
+		getdata(client, ctx, userId, userUrl, chaincode)
 	}
 
 	defer client.Close()
