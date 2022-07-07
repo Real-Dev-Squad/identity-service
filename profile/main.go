@@ -65,6 +65,20 @@ type Diff struct {
 	Website     string    `firestore:"website,omitempty"`
 }
 
+type Chaincode struct {
+	UserId    string    `firestore:"userId,omitempty"`
+	Timestamp time.Time `firestore:"timestamp,omitempty"`
+}
+type structProfilesSkipped struct {
+	ProfileURL                         []string
+	ServiceDown                        []string
+	CurrentUserDataSameAsDiff          []string
+	SameAsLastRejectedDiff             []string
+	SameAsLastPendingDiff              []string
+	ErrorInGettingProfileData          []string
+	UnAuthenticatedAccessToProfileData []string
+}
+
 /*
  Structures Conversions
 */
@@ -318,7 +332,8 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
 /*
  Getting data from the user's service
 */
-func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string) {
+func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string) string {
+	var status string = "stored"
 	userUrl = userUrl + "profile"
 	hashedChaincode, err := bcrypt.GenerateFromPassword([]byte(chaincode), bcrypt.DefaultCost)
 	if err != nil {
@@ -332,11 +347,18 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode == 401 {
-		return
+		status = "profileSkippedDueToUnAuthenticatedAccessToProfileData"
+		resp.Body.Close()
+		return status
 	}
+	if resp.StatusCode != 200 {
+		status = "profileSkippedDueToErrorInGettingProfileData"
+		resp.Body.Close()
+		return status
+	}
+
+	defer resp.Body.Close()
 
 	r, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -355,14 +377,20 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		if lastRejectedDiff != res {
 			generateAndStoreDiff(client, ctx, res, userId)
 		} else {
-			logProfileSkipped(client, ctx, userId, "Last Pending Diff is same as New Profile Data. ID: "+lastRejectedDiffId)
+			status = "skippedSameLastRejectedDiff"
+			logProfileSkipped(client, ctx, userId, "Last Rejected Diff is same as New Profile Data. Rejected Diff Id: "+lastRejectedDiffId)
 		}
 	} else if userData == res {
+		status = "skippedCurrentUserDataSameAsDiff"
+		logProfileSkipped(client, ctx, userId, "Current User Data is same as New Profile Data")
 		if lastPendingDiffId != "" {
 			setNotApproved(client, ctx, lastPendingDiffId)
 		}
+	} else {
+		status = "skippedSameLastPendingDiff"
+		logProfileSkipped(client, ctx, userId, "Last Pending Diff is same as New Profile Data")
 	}
-
+	return status
 }
 
 /*
@@ -376,6 +404,10 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
+	totalProfilesChecked := 0
+	profilesSkipped := structProfilesSkipped{}
+	profileDiffsStored := []string{}
+
 	iter := client.Collection("users").Where("profileStatus", "==", "VERIFIED").Documents(ctx)
 	for {
 		doc, err := iter.Next()
@@ -385,20 +417,20 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		if err != nil {
 			log.Fatalf("Failed to iterate: %v", err)
 		}
+		totalProfilesChecked += 1
 		var userId string = doc.Ref.ID
 		var userUrl string
 		var chaincode string
-
 		if str, ok := doc.Data()["profileURL"].(string); ok {
 			userUrl = str
 		} else {
+			profilesSkipped.ProfileURL = append(profilesSkipped.ProfileURL, userId)
+			logProfileSkipped(client, ctx, userId, "Profile URL not available")
 			continue
 		}
-
 		if str, ok := doc.Data()["chaincode"].(string); ok {
 			chaincode = str
 		}
-
 		if userUrl[len(userUrl)-1] != '/' {
 			userUrl = userUrl + "/"
 		}
@@ -412,17 +444,74 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 		logHealth(client, ctx, userId, isServiceRunning)
 		if !isServiceRunning {
+			profilesSkipped.ServiceDown = append(profilesSkipped.ServiceDown, userId)
+			logProfileSkipped(client, ctx, userId, "Service Down")
 			setProfileStatusBlocked(client, ctx, userId, "BLOCKED")
 			continue
 		}
 
-		getdata(client, ctx, userId, userUrl, chaincode)
+		status := getdata(client, ctx, userId, userUrl, chaincode)
+		if status == "skippedSameLastPendingDiff" {
+			profilesSkipped.SameAsLastPendingDiff = append(profilesSkipped.SameAsLastPendingDiff, userId)
+		} else if status == "skippedCurrentUserDataSameAsDiff" {
+			profilesSkipped.CurrentUserDataSameAsDiff = append(profilesSkipped.CurrentUserDataSameAsDiff, userId)
+		} else if status == "skippedSameLastRejectedDiff" {
+			profilesSkipped.SameAsLastRejectedDiff = append(profilesSkipped.SameAsLastRejectedDiff, userId)
+		} else if status == "profileSkippedDueToErrorInGettingProfileData" {
+			profilesSkipped.ErrorInGettingProfileData = append(profilesSkipped.ErrorInGettingProfileData, userId)
+		} else if status == "profileSkippedDueToUnAuthenticatedAccessToProfileData" {
+			profilesSkipped.UnAuthenticatedAccessToProfileData = append(profilesSkipped.UnAuthenticatedAccessToProfileData, userId)
+		} else {
+			profileDiffsStored = append(profileDiffsStored, userId)
+		}
+	}
+
+	var report = map[string]interface{}{
+		"TotalProfilesChecked": totalProfilesChecked,
+		"Stored": map[string]interface{}{
+			"count":   len(profileDiffsStored),
+			"userIds": profileDiffsStored,
+		},
+		"Skipped": map[string]interface{}{
+			"CurrentUserDataSameAsDiff": map[string]interface{}{
+				"count":   len(profilesSkipped.CurrentUserDataSameAsDiff),
+				"userIds": profilesSkipped.CurrentUserDataSameAsDiff,
+			},
+			"SameAsLastRejectedDiff": map[string]interface{}{
+				"count":   len(profilesSkipped.SameAsLastRejectedDiff),
+				"userIds": profilesSkipped.SameAsLastRejectedDiff,
+			},
+			"NoProfileURLCount": map[string]interface{}{
+				"count":   len(profilesSkipped.ProfileURL),
+				"userIds": profilesSkipped.ProfileURL,
+			},
+			"UnauthenticatedAccessToProfileData": map[string]interface{}{
+				"count":   len(profilesSkipped.UnAuthenticatedAccessToProfileData),
+				"userIds": profilesSkipped.UnAuthenticatedAccessToProfileData,
+			},
+			"ErrorInGettingProfileData": map[string]interface{}{
+				"count":   len(profilesSkipped.ErrorInGettingProfileData),
+				"userIds": profilesSkipped.ErrorInGettingProfileData,
+			},
+			"ServiceDown": map[string]interface{}{
+				"count":   len(profilesSkipped.ServiceDown),
+				"userIds": profilesSkipped.ServiceDown,
+			},
+			"SameAsLastPendingDiff": map[string]interface{}{
+				"count":   len(profilesSkipped.SameAsLastPendingDiff),
+				"userIds": profilesSkipped.SameAsLastPendingDiff,
+			},
+		},
+	}
+	reportjson, err := json.Marshal(report)
+	if err != nil {
+		return events.APIGatewayProxyResponse{}, err
 	}
 
 	defer client.Close()
 
 	return events.APIGatewayProxyResponse{
-		Body:       "Awesome, Your server health is good!!!!",
+		Body:       string(reportjson),
 		StatusCode: 200,
 	}, nil
 }
