@@ -62,26 +62,14 @@ type Diff struct {
 	InstagramId string    `firestore:"instagram_id,omitempty"`
 	Website     string    `firestore:"website,omitempty"`
 }
-
-type profileStatusCount struct {
-	totalProfilesChecked                          int
-	profilesSkippedDueToProfileURL                int
-	profilesSkippedDueToServiceDown               int
-	profilesSkippedDueToCurrentUserDataSameAsDiff int
-	profilesSkippedDueToSameLastRejectedDiff      int
-	profilesSkippedSameLastPendingDiff            int
-	profileDiffsStored                            int
-}
-
-// var profileDiffsStored, profilesSkippedDueToProfileURL, profilesSkippedDueToServiceDown, profilesSkippedDueToCurrentUserDataSameAsDiff, profilesSkippedDueToSameLastRejectedDiff, profilesSkippedSameLastPendingDiff []string
-
-type profileStatusArray struct {
-	profileDiffsStored                            []string
-	profilesSkippedDueToProfileURL                []string
-	profilesSkippedDueToServiceDown               []string
-	profilesSkippedDueToCurrentUserDataSameAsDiff []string
-	profilesSkippedDueToSameLastRejectedDiff      []string
-	profilesSkippedSameLastPendingDiff            []string
+type structProfilesSkipped struct {
+	ProfileURL                         []string
+	ServiceDown                        []string
+	CurrentUserDataSameAsDiff          []string
+	SameAsLastRejectedDiff             []string
+	SameAsLastPendingDiff              []string
+	ErrorInGettingProfileData          []string
+	UnAuthenticatedAccessToProfileData []string
 }
 
 /*
@@ -183,7 +171,7 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 */
 func logHealth(client *firestore.Client, ctx context.Context, userId string, isServiceRunning bool) {
 	newLog := Log{
-		Type:      "SERVICE_HEALTH",
+		Type:      "PROFILE_HEALTH",
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
@@ -217,7 +205,7 @@ func logProfileSkipped(client *firestore.Client, ctx context.Context, userId str
 /*
  Function for setting the profileStatus in user object in firestore
 */
-func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, status string) {
+func setProfileStatus(client *firestore.Client, ctx context.Context, userId string, status string) {
 	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
 		"profileStatus": status,
 	}, firestore.MergeAll)
@@ -307,6 +295,17 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	if err != nil {
 		log.Fatal(err)
 	}
+	if resp.StatusCode == 401 {
+		status = "profileSkippedDueToUnAuthenticatedAccessToProfileData"
+		resp.Body.Close()
+		return status
+	}
+	if resp.StatusCode != 200 {
+		status = "profileSkippedDueToErrorInGettingProfileData"
+		resp.Body.Close()
+		return status
+	}
+
 	defer resp.Body.Close()
 
 	r, err := ioutil.ReadAll(resp.Body)
@@ -353,8 +352,9 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	profileStatusCounter := profileStatusCount{0, 0, 0, 0, 0, 0, 0}
-	profileStatusList := profileStatusArray{}
+	totalProfilesChecked := 0
+	profilesSkipped := structProfilesSkipped{}
+	profileDiffsStored := []string{}
 
 	iter := client.Collection("users").Where("profileStatus", "==", "VERIFIED").Documents(ctx)
 	for {
@@ -365,14 +365,13 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		if err != nil {
 			log.Fatalf("Failed to iterate: %v", err)
 		}
-		profileStatusCounter.totalProfilesChecked += 1
+		totalProfilesChecked += 1
 		var userId string = doc.Ref.ID
 		var userUrl string
 		if str, ok := doc.Data()["profileURL"].(string); ok {
 			userUrl = str
 		} else {
-			profileStatusCounter.profilesSkippedDueToProfileURL += 1
-			profileStatusList.profilesSkippedDueToProfileURL = append(profileStatusList.profilesSkippedDueToProfileURL, userId)
+			profilesSkipped.ProfileURL = append(profilesSkipped.ProfileURL, userId)
 			logProfileSkipped(client, ctx, userId, "Profile URL not available")
 			continue
 		}
@@ -389,55 +388,62 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 		logHealth(client, ctx, userId, isServiceRunning)
 		if !isServiceRunning {
-			profileStatusCounter.profilesSkippedDueToServiceDown += 1
-			profileStatusList.profilesSkippedDueToServiceDown = append(profileStatusList.profilesSkippedDueToServiceDown, userId)
+			profilesSkipped.ServiceDown = append(profilesSkipped.ServiceDown, userId)
 			logProfileSkipped(client, ctx, userId, "Service Down")
-			setProfileStatusBlocked(client, ctx, userId, "service not running")
+			setProfileStatus(client, ctx, userId, "service not running")
 			continue
 		}
 
 		status := getdata(client, ctx, userId, userUrl)
 		if status == "skippedSameLastPendingDiff" {
-			profileStatusCounter.profilesSkippedSameLastPendingDiff += 1
-			profileStatusList.profilesSkippedSameLastPendingDiff = append(profileStatusList.profilesSkippedSameLastPendingDiff, userId)
+			profilesSkipped.SameAsLastPendingDiff = append(profilesSkipped.SameAsLastPendingDiff, userId)
 		} else if status == "skippedCurrentUserDataSameAsDiff" {
-			profileStatusCounter.profilesSkippedDueToCurrentUserDataSameAsDiff += 1
-			profileStatusList.profilesSkippedDueToCurrentUserDataSameAsDiff = append(profileStatusList.profilesSkippedDueToCurrentUserDataSameAsDiff, userId)
+			profilesSkipped.CurrentUserDataSameAsDiff = append(profilesSkipped.CurrentUserDataSameAsDiff, userId)
 		} else if status == "skippedSameLastRejectedDiff" {
-			profileStatusCounter.profilesSkippedDueToSameLastRejectedDiff += 1
-			profileStatusList.profilesSkippedDueToSameLastRejectedDiff = append(profileStatusList.profilesSkippedDueToSameLastRejectedDiff, userId)
+			profilesSkipped.SameAsLastRejectedDiff = append(profilesSkipped.SameAsLastRejectedDiff, userId)
+		} else if status == "profileSkippedDueToErrorInGettingProfileData" {
+			profilesSkipped.ErrorInGettingProfileData = append(profilesSkipped.ErrorInGettingProfileData, userId)
+		} else if status == "profileSkippedDueToUnAuthenticatedAccessToProfileData" {
+			profilesSkipped.UnAuthenticatedAccessToProfileData = append(profilesSkipped.UnAuthenticatedAccessToProfileData, userId)
 		} else {
-			profileStatusCounter.profileDiffsStored += 1
-			profileStatusList.profileDiffsStored = append(profileStatusList.profileDiffsStored, userId)
+			profileDiffsStored = append(profileDiffsStored, userId)
 		}
 	}
 
 	var report = map[string]interface{}{
-		"TotalProfilesChecked": profileStatusCounter.totalProfilesChecked,
+		"TotalProfilesChecked": totalProfilesChecked,
 		"Stored": map[string]interface{}{
-			"count":   profileStatusCounter.profileDiffsStored,
-			"userIds": profileStatusList.profileDiffsStored,
+			"count":   len(profileDiffsStored),
+			"userIds": profileDiffsStored,
 		},
 		"Skipped": map[string]interface{}{
 			"CurrentUserDataSameAsDiff": map[string]interface{}{
-				"count":   profileStatusCounter.profilesSkippedDueToCurrentUserDataSameAsDiff,
-				"userIds": profileStatusList.profilesSkippedDueToCurrentUserDataSameAsDiff,
+				"count":   len(profilesSkipped.CurrentUserDataSameAsDiff),
+				"userIds": profilesSkipped.CurrentUserDataSameAsDiff,
 			},
-			"SameLastRejectedDiff": map[string]interface{}{
-				"count":   profileStatusCounter.profilesSkippedDueToSameLastRejectedDiff,
-				"userIds": profileStatusList.profilesSkippedDueToSameLastRejectedDiff,
+			"SameAsLastRejectedDiff": map[string]interface{}{
+				"count":   len(profilesSkipped.SameAsLastRejectedDiff),
+				"userIds": profilesSkipped.SameAsLastRejectedDiff,
 			},
 			"NoProfileURLCount": map[string]interface{}{
-				"count":   profileStatusCounter.profilesSkippedDueToProfileURL,
-				"userIds": profileStatusList.profilesSkippedDueToProfileURL,
+				"count":   len(profilesSkipped.ProfileURL),
+				"userIds": profilesSkipped.ProfileURL,
+			},
+			"UnauthenticatedAccessToProfileData": map[string]interface{}{
+				"count":   len(profilesSkipped.UnAuthenticatedAccessToProfileData),
+				"userIds": profilesSkipped.UnAuthenticatedAccessToProfileData,
+			},
+			"ErrorInGettingProfileData": map[string]interface{}{
+				"count":   len(profilesSkipped.ErrorInGettingProfileData),
+				"userIds": profilesSkipped.ErrorInGettingProfileData,
 			},
 			"ServiceDown": map[string]interface{}{
-				"count":   profileStatusCounter.profilesSkippedDueToServiceDown,
-				"userIds": profileStatusList.profilesSkippedDueToServiceDown,
+				"count":   len(profilesSkipped.ServiceDown),
+				"userIds": profilesSkipped.ServiceDown,
 			},
-			"SameLastPendingDiff": map[string]interface{}{
-				"count":   profileStatusCounter.profilesSkippedSameLastPendingDiff,
-				"userIds": profileStatusList.profilesSkippedSameLastPendingDiff,
+			"SameAsLastPendingDiff": map[string]interface{}{
+				"count":   len(profilesSkipped.SameAsLastPendingDiff),
+				"userIds": profilesSkipped.SameAsLastPendingDiff,
 			},
 		},
 	}
