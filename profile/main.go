@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
@@ -61,6 +63,11 @@ type Diff struct {
 	TwitterId   string    `firestore:"twitter_id,omitempty"`
 	InstagramId string    `firestore:"instagram_id,omitempty"`
 	Website     string    `firestore:"website,omitempty"`
+}
+
+type Chaincode struct {
+	UserId    string    `firestore:"userId,omitempty"`
+	Timestamp time.Time `firestore:"timestamp,omitempty"`
 }
 type structProfilesSkipped struct {
 	ProfileURL                         []string
@@ -109,6 +116,26 @@ func resToDiff(res Res, userId string) Diff {
 		TwitterId:   res.TwitterId,
 		InstagramId: res.InstagramId,
 		Website:     res.Website,
+	}
+}
+
+func diffToMap(diff Diff) map[string]interface{} {
+	return map[string]interface{}{
+		"userId":       diff.UserId,
+		"timestamp":    diff.Timestamp,
+		"approval":     diff.Approval,
+		"first_name":   diff.FirstName,
+		"last_name":    diff.LastName,
+		"email":        diff.Email,
+		"phone":        diff.Phone,
+		"yoe":          diff.YOE,
+		"company":      diff.Company,
+		"designation":  diff.Designation,
+		"github_id":    diff.GithubId,
+		"linkedin_id":  diff.LinkedIn,
+		"twitter_id":   diff.TwitterId,
+		"instagram_id": diff.InstagramId,
+		"website":      diff.Website,
 	}
 }
 
@@ -171,7 +198,7 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 */
 func logHealth(client *firestore.Client, ctx context.Context, userId string, isServiceRunning bool) {
 	newLog := Log{
-		Type:      "PROFILE_HEALTH",
+		Type:      "PROFILE_SERVICE_HEALTH",
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
@@ -202,23 +229,37 @@ func logProfileSkipped(client *firestore.Client, ctx context.Context, userId str
 	client.Collection("logs").Add(ctx, newLog)
 }
 
-/*
- Function for setting the profileStatus in user object in firestore
-*/
-func setProfileStatus(client *firestore.Client, ctx context.Context, userId string, status string) {
-	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
-		"profileStatus": status,
-	}, firestore.MergeAll)
-
+func logProfileStored(client *firestore.Client, ctx context.Context, userId string) {
 	newLog := Log{
-		Type:      "PROFILE_BLOCKED",
+		Type:      "PROFILE_DIFF_STORED",
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
 		},
 		Body: map[string]interface{}{
 			"userId": userId,
-			"reason": "service not running",
+		},
+	}
+	client.Collection("logs").Add(ctx, newLog)
+}
+
+/*
+ Function for setting the profileStatus in user object in firestore
+*/
+func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string) {
+	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
+		"profileStatus": "BLOCKED",
+	}, firestore.MergeAll)
+
+	newLog := Log{
+		Type:      "PROFILE_SERVICE_BLOCKED",
+		Timestamp: time.Now(),
+		Meta: map[string]interface{}{
+			"userId": userId,
+		},
+		Body: map[string]interface{}{
+			"userId": userId,
+			"reason": reason,
 		},
 	}
 	client.Collection("logs").Add(ctx, newLog)
@@ -279,19 +320,29 @@ func getUserData(client *firestore.Client, ctx context.Context, userId string) R
 */
 func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string) {
 	var diff Diff = resToDiff(res, userId)
-	_, _, err := client.Collection("profileDiffs").Add(ctx, diff)
+	_, _, err := client.Collection("profileDiffs").Add(ctx, diffToMap(diff))
 	if err != nil {
 		log.Fatal(err)
+	} else {
+		logProfileStored(client, ctx, userId)
 	}
 }
 
 /*
  Getting data from the user's service
 */
-func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string) string {
+func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string) string {
 	var status string = "stored"
 	userUrl = userUrl + "profile"
-	resp, err := http.Get(userUrl)
+	hashedChaincode, err := bcrypt.GenerateFromPassword([]byte(chaincode), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	httpClient := &http.Client{}
+	req, _ := http.NewRequest("GET", userUrl, nil)
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", string(hashedChaincode)))
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -368,12 +419,16 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		totalProfilesChecked += 1
 		var userId string = doc.Ref.ID
 		var userUrl string
+		var chaincode string
 		if str, ok := doc.Data()["profileURL"].(string); ok {
 			userUrl = str
 		} else {
 			profilesSkipped.ProfileURL = append(profilesSkipped.ProfileURL, userId)
 			logProfileSkipped(client, ctx, userId, "Profile URL not available")
 			continue
+		}
+		if str, ok := doc.Data()["chaincode"].(string); ok {
+			chaincode = str
 		}
 		if userUrl[len(userUrl)-1] != '/' {
 			userUrl = userUrl + "/"
@@ -390,11 +445,16 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		if !isServiceRunning {
 			profilesSkipped.ServiceDown = append(profilesSkipped.ServiceDown, userId)
 			logProfileSkipped(client, ctx, userId, "Service Down")
-			setProfileStatus(client, ctx, userId, "service not running")
+			setProfileStatusBlocked(client, ctx, userId, "BLOCKED")
+			newChaincode := Chaincode{
+				UserId:    userId,
+				Timestamp: time.Now(),
+			}
+			client.Collection("chaincodes").Add(ctx, newChaincode)
 			continue
 		}
 
-		status := getdata(client, ctx, userId, userUrl)
+		status := getdata(client, ctx, userId, userUrl, chaincode)
 		if status == "skippedSameLastPendingDiff" {
 			profilesSkipped.SameAsLastPendingDiff = append(profilesSkipped.SameAsLastPendingDiff, userId)
 		} else if status == "skippedCurrentUserDataSameAsDiff" {
