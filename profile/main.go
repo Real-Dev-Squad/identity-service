@@ -65,10 +65,6 @@ type Diff struct {
 	Website     string    `firestore:"website,omitempty"`
 }
 
-type Chaincode struct {
-	UserId    string    `firestore:"userId,omitempty"`
-	Timestamp time.Time `firestore:"timestamp,omitempty"`
-}
 
 /*
  Structures Conversions
@@ -240,6 +236,7 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string) {
 	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
 		"profileStatus": "BLOCKED",
+		"chaincode":     "",
 	}, firestore.MergeAll)
 
 	newLog := Log{
