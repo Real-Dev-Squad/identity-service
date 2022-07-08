@@ -33,11 +33,6 @@ type Log struct {
 	Body      map[string]interface{} `firestore:"body,omitempty"`
 }
 
-type Chaincode struct {
-	UserId    string    `firestore:"userId,omitempty"`
-	Timestamp time.Time `firestore:"timestamp,omitempty"`
-}
-
 /*
  Util
 */
@@ -106,11 +101,6 @@ func logVerification(client *firestore.Client, ctx context.Context, status strin
 			"userId": userId,
 			"reason": "Chaincode not linked. Hash sent by service is not verified.",
 		}
-		newChaincode := Chaincode{
-			UserId:    userId,
-			Timestamp: time.Now(),
-		}
-		client.Collection("chaincodes").Add(ctx, newChaincode)
 	}
 	newLog := Log{
 		Type:      logtype,
@@ -147,7 +137,6 @@ func setProfileStatus(client *firestore.Client, ctx context.Context, id string, 
 	return nil
 }
 
-
 /*
  Function to get the userData using userId
 */
@@ -165,6 +154,8 @@ func getUserData(client *firestore.Client, ctx context.Context, userId string) (
 		return "", "", "", errors.New("profile url is not a string")
 	}
 	if str, ok := dsnap.Data()["profileStatus"].(string); ok {
+		profileStatus = str
+	} else {
 		profileStatus = ""
 	}
 
@@ -192,6 +183,7 @@ func getUserData(client *firestore.Client, ctx context.Context, userId string) (
 
 	return profileURL, profileStatus, chaincode, nil
 }
+
 /*
  Function to extract userId from the request body
 */
