@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -64,7 +64,6 @@ type Diff struct {
 	InstagramId string    `firestore:"instagram_id,omitempty"`
 	Website     string    `firestore:"website,omitempty"`
 }
-
 
 /*
  Structures Conversions
@@ -335,8 +334,8 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 401{
-		return 
+	if resp.StatusCode == 401 {
+		return
 	}
 
 	r, err := ioutil.ReadAll(resp.Body)
@@ -389,7 +388,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		var userId string = doc.Ref.ID
 		var userUrl string
 		var chaincode string
-		
+
 		if str, ok := doc.Data()["profileURL"].(string); ok {
 			userUrl = str
 		} else {
@@ -414,11 +413,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		logHealth(client, ctx, userId, isServiceRunning)
 		if !isServiceRunning {
 			setProfileStatusBlocked(client, ctx, userId, "BLOCKED")
-			newChaincode := Chaincode{
-				UserId:    userId,
-				Timestamp: time.Now(),
-			}
-			client.Collection("chaincodes").Add(ctx, newChaincode)
 			continue
 		}
 
