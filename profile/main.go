@@ -65,10 +65,6 @@ type Diff struct {
 	Website     string    `firestore:"website,omitempty"`
 }
 
-type Chaincode struct {
-	UserId    string    `firestore:"userId,omitempty"`
-	Timestamp time.Time `firestore:"timestamp,omitempty"`
-}
 type structProfilesSkipped struct {
 	ProfileURL                         []string
 	ServiceDown                        []string
