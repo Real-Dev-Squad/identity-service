@@ -141,6 +141,7 @@ func diffToMap(diff Diff) map[string]interface{} {
 var Constants map[string]string = map[string]string{
 	"ENV_DEVELOPMENT":         "DEVELOPMENT",
 	"ENV_PRODUCTION":          "PRODUCTION",
+	"STORED":                  "stored",
 	"FIRE_STORE_CRED":         "firestoreCred",
 	"PROFILE_SERVICE_HEALTH":  "PROFILE_SERVICE_HEALTH",
 	"PROFILE_SKIPPED":         "PROFILE_SKIPPED",
@@ -349,7 +350,7 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
  Getting data from the user's service
 */
 func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string) string {
-	var status string = "stored"
+	var status string = Constants["STORED"]
 	userUrl = userUrl + "profile"
 	hashedChaincode, err := bcrypt.GenerateFromPassword([]byte(chaincode), bcrypt.DefaultCost)
 	if err != nil {
