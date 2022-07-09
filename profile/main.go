@@ -366,11 +366,15 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	}
 	if resp.StatusCode == 401 {
 		status = Constants["PROFILE_SKIPPED_DUE_TO_UNAUTHENTICATED_ACCESS_TO_PROFILE_DATA"]
+		logProfileSkipped(client, ctx, userId, "Unauthenticated Access to Profile Data")
+		setProfileStatusBlocked(client, ctx, userId, "Unauthenticated Access to Profile Data")
 		resp.Body.Close()
 		return status
 	}
 	if resp.StatusCode != 200 {
 		status = Constants["PROFILE_SKIPPED_DUE_TO_ERROR_IN_GETTING_PROFILE_DATA"]
+		logProfileSkipped(client, ctx, userId, "Error in getting Profile Data")
+		setProfileStatusBlocked(client, ctx, userId, "Error in getting Profile Data")
 		resp.Body.Close()
 		return status
 	}
@@ -443,6 +447,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		} else {
 			profilesSkipped.ProfileURL = append(profilesSkipped.ProfileURL, userId)
 			logProfileSkipped(client, ctx, userId, "Profile URL not available")
+			setProfileStatusBlocked(client, ctx, userId, "Profile URL not available")
 			continue
 		}
 		if str, ok := doc.Data()["chaincode"].(string); ok {
@@ -462,8 +467,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		logHealth(client, ctx, userId, isServiceRunning)
 		if !isServiceRunning {
 			profilesSkipped.ServiceDown = append(profilesSkipped.ServiceDown, userId)
-			logProfileSkipped(client, ctx, userId, "Service Down")
-			setProfileStatusBlocked(client, ctx, userId, Constants["STATUS_BLOCKED"])
+			logProfileSkipped(client, ctx, userId, "Profile Service Down")
+			setProfileStatusBlocked(client, ctx, userId, "Profile Service Down")
 			continue
 		}
 
