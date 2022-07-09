@@ -73,6 +73,8 @@ type structProfilesSkipped struct {
 	SameAsLastPendingDiff              []string
 	ErrorInGettingProfileData          []string
 	UnAuthenticatedAccessToProfileData []string
+	ChaincodeNotFound                  []string
+	ProfileServiceBlocked              []string
 }
 
 /*
@@ -442,17 +444,36 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		var userId string = doc.Ref.ID
 		var userUrl string
 		var chaincode string
+		var username string
+
+		if str, ok := doc.Data()["username"].(string); ok {
+			username = str
+		}
+
 		if str, ok := doc.Data()["profileURL"].(string); ok {
 			userUrl = str
 		} else {
-			profilesSkipped.ProfileURL = append(profilesSkipped.ProfileURL, userId)
+			profilesSkipped.ProfileURL = append(profilesSkipped.ProfileURL, username)
 			logProfileSkipped(client, ctx, userId, "Profile URL not available")
 			setProfileStatusBlocked(client, ctx, userId, "Profile URL not available")
 			continue
 		}
+
 		if str, ok := doc.Data()["chaincode"].(string); ok {
+			if str == "" {
+				profilesSkipped.ProfileServiceBlocked = append(profilesSkipped.ProfileServiceBlocked, username)
+				logProfileSkipped(client, ctx, userId, "Profile Service Blocked or Chaincode is empty")
+				setProfileStatusBlocked(client, ctx, userId, "Profile Service Blocked or Chaincode is empty")
+				continue
+			}
 			chaincode = str
+		} else {
+			profilesSkipped.ChaincodeNotFound = append(profilesSkipped.ChaincodeNotFound, username)
+			logProfileSkipped(client, ctx, userId, "Chaincode Not Found")
+			setProfileStatusBlocked(client, ctx, userId, "Chaincode Not Found")
+			continue
 		}
+
 		if userUrl[len(userUrl)-1] != '/' {
 			userUrl = userUrl + "/"
 		}
@@ -466,7 +487,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 		logHealth(client, ctx, userId, isServiceRunning)
 		if !isServiceRunning {
-			profilesSkipped.ServiceDown = append(profilesSkipped.ServiceDown, userId)
+			profilesSkipped.ServiceDown = append(profilesSkipped.ServiceDown, username)
 			logProfileSkipped(client, ctx, userId, "Profile Service Down")
 			setProfileStatusBlocked(client, ctx, userId, "Profile Service Down")
 			continue
@@ -474,17 +495,17 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 		status := getdata(client, ctx, userId, userUrl, chaincode)
 		if status == Constants["SKIPPED_SAME_LAST_PENDING_DIFF"] {
-			profilesSkipped.SameAsLastPendingDiff = append(profilesSkipped.SameAsLastPendingDiff, userId)
+			profilesSkipped.SameAsLastPendingDiff = append(profilesSkipped.SameAsLastPendingDiff, username)
 		} else if status == Constants["SKIPPED_CURRENT_USER_DATA_SAME_AS_DIFF"] {
-			profilesSkipped.CurrentUserDataSameAsDiff = append(profilesSkipped.CurrentUserDataSameAsDiff, userId)
+			profilesSkipped.CurrentUserDataSameAsDiff = append(profilesSkipped.CurrentUserDataSameAsDiff, username)
 		} else if status == Constants["SKIPPED_SAME_LAST_REJECTED_DIFF"] {
-			profilesSkipped.SameAsLastRejectedDiff = append(profilesSkipped.SameAsLastRejectedDiff, userId)
+			profilesSkipped.SameAsLastRejectedDiff = append(profilesSkipped.SameAsLastRejectedDiff, username)
 		} else if status == Constants["PROFILE_SKIPPED_DUE_TO_ERROR_IN_GETTING_PROFILE_DATA"] {
-			profilesSkipped.ErrorInGettingProfileData = append(profilesSkipped.ErrorInGettingProfileData, userId)
+			profilesSkipped.ErrorInGettingProfileData = append(profilesSkipped.ErrorInGettingProfileData, username)
 		} else if status == Constants["PROFILE_SKIPPED_DUE_TO_UNAUTHENTICATED_ACCESS_TO_PROFILE_DATA"] {
-			profilesSkipped.UnAuthenticatedAccessToProfileData = append(profilesSkipped.UnAuthenticatedAccessToProfileData, userId)
+			profilesSkipped.UnAuthenticatedAccessToProfileData = append(profilesSkipped.UnAuthenticatedAccessToProfileData, username)
 		} else {
-			profileDiffsStored = append(profileDiffsStored, userId)
+			profileDiffsStored = append(profileDiffsStored, username)
 		}
 	}
 
@@ -506,37 +527,45 @@ func getReport(totalProfilesChecked int, profileDiffsStored []string, profilesSk
 	var report = map[string]interface{}{
 		"TotalProfilesChecked": totalProfilesChecked,
 		"Stored": map[string]interface{}{
-			"count":   len(profileDiffsStored),
-			"userIds": profileDiffsStored,
+			"count":     len(profileDiffsStored),
+			"usernames": profileDiffsStored,
 		},
 		"Skipped": map[string]interface{}{
 			"CurrentUserDataSameAsDiff": map[string]interface{}{
-				"count":   len(profilesSkipped.CurrentUserDataSameAsDiff),
-				"userIds": profilesSkipped.CurrentUserDataSameAsDiff,
+				"count":     len(profilesSkipped.CurrentUserDataSameAsDiff),
+				"usernames": profilesSkipped.CurrentUserDataSameAsDiff,
 			},
 			"SameAsLastRejectedDiff": map[string]interface{}{
-				"count":   len(profilesSkipped.SameAsLastRejectedDiff),
-				"userIds": profilesSkipped.SameAsLastRejectedDiff,
+				"count":     len(profilesSkipped.SameAsLastRejectedDiff),
+				"usernames": profilesSkipped.SameAsLastRejectedDiff,
 			},
 			"NoProfileURLCount": map[string]interface{}{
-				"count":   len(profilesSkipped.ProfileURL),
-				"userIds": profilesSkipped.ProfileURL,
+				"count":     len(profilesSkipped.ProfileURL),
+				"usernames": profilesSkipped.ProfileURL,
 			},
 			"UnauthenticatedAccessToProfileData": map[string]interface{}{
-				"count":   len(profilesSkipped.UnAuthenticatedAccessToProfileData),
-				"userIds": profilesSkipped.UnAuthenticatedAccessToProfileData,
+				"count":     len(profilesSkipped.UnAuthenticatedAccessToProfileData),
+				"usernames": profilesSkipped.UnAuthenticatedAccessToProfileData,
 			},
 			"ErrorInGettingProfileData": map[string]interface{}{
-				"count":   len(profilesSkipped.ErrorInGettingProfileData),
-				"userIds": profilesSkipped.ErrorInGettingProfileData,
+				"count":     len(profilesSkipped.ErrorInGettingProfileData),
+				"usernames": profilesSkipped.ErrorInGettingProfileData,
 			},
 			"ServiceDown": map[string]interface{}{
-				"count":   len(profilesSkipped.ServiceDown),
-				"userIds": profilesSkipped.ServiceDown,
+				"count":     len(profilesSkipped.ServiceDown),
+				"usernames": profilesSkipped.ServiceDown,
 			},
 			"SameAsLastPendingDiff": map[string]interface{}{
-				"count":   len(profilesSkipped.SameAsLastPendingDiff),
-				"userIds": profilesSkipped.SameAsLastPendingDiff,
+				"count":     len(profilesSkipped.SameAsLastPendingDiff),
+				"usernames": profilesSkipped.SameAsLastPendingDiff,
+			},
+			"ProfileServiceBlockedOrChaincodeEmpty": map[string]interface{}{
+				"count":     len(profilesSkipped.ProfileServiceBlocked),
+				"usernames": profilesSkipped.ProfileServiceBlocked,
+			},
+			"ChaincodeNotFound": map[string]interface{}{
+				"count":     len(profilesSkipped.ChaincodeNotFound),
+				"usernames": profilesSkipped.ChaincodeNotFound,
 			},
 		},
 	}
