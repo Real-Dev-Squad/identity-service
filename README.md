@@ -4,7 +4,7 @@ The part of the website which holds the identity of members
 
 # How can I contribute?
 
-Wish to contribute? You can find a detailed guide [here](./CONTRIBUTING.md)!
+Wish to contribute? You can find a detailed guide [here](./CONTRIBUTING.md)
 
 ## Project Structure
 
@@ -13,10 +13,13 @@ We are using AWS SAM(Serverless Application Model) with [golang](https://go.dev/
 #### Routes Created
 
 ```
-/getData
+/profile
 /verify
-/health-check
+/healthCheck
 ```
+
+### Sequence Diagram of Identity Service
+![](https://user-images.githubusercontent.com/45519620/176491640-6f58d7d5-6fe1-42d9-a9d6-fc1b23e0dee2.jpg)
 
 ## How to start ?
 
@@ -31,6 +34,7 @@ You should have some things pre-installed -
 
 - Create an application on [FireStore](https://firebase.google.com/docs/firestore) and [generate a service file](https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
 - Add the service file credentials in the sample-env.json file as a string.
+- Rename `sample-env.json` to `env.json`
 - Remove all the spaces such that the whole _json_ that you copied is in a single line
 - Replace **\n** with **\\\\n** in your copied json
 - Replace **"** with **\\"** in your copied json
