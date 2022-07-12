@@ -4,7 +4,7 @@ The part of the website which holds the identity of members
 
 # How can I contribute?
 
-Wish to contribute? You can find a detailed guide [here](./CONTRIBUTING.md)
+Wish to contribute? You can find a detailed guide [here](./CONTRIBUTING.md)!
 
 ## Project Structure
 
