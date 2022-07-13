@@ -78,7 +78,7 @@ type structProfilesSkipped struct {
 }
 
 /*
- Structures Conversions
+	Structures Conversions
 */
 func diffToRes(diff Diff) Res {
 	return Res{
