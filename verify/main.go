@@ -33,6 +33,11 @@ type Log struct {
 	Body      map[string]interface{} `firestore:"body,omitempty"`
 }
 
+type deps struct {
+	client *firestore.Client
+	ctx    context.Context
+}
+
 /*
  Util
 */
@@ -68,7 +73,11 @@ func getFirestoreKey() string {
  Function to initialize the firestore client
 */
 func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
-	sa := option.WithCredentialsJSON([]byte(getFirestoreKey()))
+	var firestoreKey = getFirestoreKey()
+	if firestoreKey == "" {
+		return nil, errors.New("no firestore key found")
+	}
+	sa := option.WithCredentialsJSON([]byte(firestoreKey))
 	app, err := firebase.NewApp(ctx, nil, sa)
 	if err != nil {
 		return nil, err
@@ -254,19 +263,14 @@ func verify(profileURL string, chaincode string) (string, error) {
 /*
  Main Handler Function
 */
-func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	ctx := context.Background()
-	client, err := initializeFirestoreClient(ctx)
-	if err != nil {
-		return events.APIGatewayProxyResponse{}, err
-	}
+func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
 	var userId string = getUserIdFromBody([]byte(request.Body))
 	if userId == "" {
 		return events.APIGatewayProxyResponse{}, errors.New("no userId provided")
 	}
 
-	profileURL, profileStatus, chaincode, err := getUserData(client, ctx, userId)
+	profileURL, profileStatus, chaincode, err := getUserData(d.client, d.ctx, userId)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
@@ -287,9 +291,9 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
-	logVerification(client, ctx, status, profileURL, userId)
-	setProfileStatus(client, ctx, userId, status)
-	defer client.Close()
+	logVerification(d.client, d.ctx, status, profileURL, userId)
+	setProfileStatus(d.client, d.ctx, userId, status)
+	defer d.client.Close()
 
 	return events.APIGatewayProxyResponse{
 		Body:       "Verification Process Done",
@@ -301,5 +305,16 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
  Starts the lambda (Entry Point)
 */
 func main() {
-	lambda.Start(handler)
+	ctx := context.Background()
+	client, err := initializeFirestoreClient(ctx)
+	if err != nil {
+		return
+	}
+
+	d := deps{
+		client: client,
+		ctx:    ctx,
+	}
+
+	lambda.Start(d.handler)
 }
