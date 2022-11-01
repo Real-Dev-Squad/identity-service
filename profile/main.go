@@ -223,7 +223,7 @@ func (res Res) Validate() error {
 		validation.Field(&res.LastName, validation.Required, validation.Length(3, 50)),
 		validation.Field(&res.Phone, validation.Required, is.Digit),
 		validation.Field(&res.Email, validation.Required, is.Email),
-		validation.Field(&res.YOE, validation.Min(0), validation.Max(25)),
+		validation.Field(&res.YOE, validation.Min(0)),
 		validation.Field(&res.Company, validation.Required),
 		validation.Field(&res.Designation, validation.Required),
 		validation.Field(&res.GithubId, validation.Required),
