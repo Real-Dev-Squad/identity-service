@@ -164,7 +164,7 @@ var Constants map[string]string = map[string]string{
 	"SKIPPED_SAME_LAST_PENDING_DIFF":                                "skippedSameLastPendingDiff",
 	"SKIPPED_CURRENT_USER_DATA_SAME_AS_DIFF":                        "skippedCurrentUserDataSameAsDiff",
 	"SKIPPED_OTHER_ERROR":                                           "skippedOtherError",
-	"SKIPPED_VALIDATION_ERROR": "validation error",
+	"SKIPPED_VALIDATION_ERROR":                                      "validation error",
 }
 
 /*
@@ -217,11 +217,10 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 	return client, nil
 }
 
-
 func (res Res) Validate() error {
 	return validation.ValidateStruct(&res,
-		validation.Field(&res.FirstName,validation.Required),
-		validation.Field(&res.LastName, validation.Required,),
+		validation.Field(&res.FirstName, validation.Required),
+		validation.Field(&res.LastName, validation.Required),
 		validation.Field(&res.Phone, validation.Required, is.Digit),
 		validation.Field(&res.Email, validation.Required, is.Email),
 		validation.Field(&res.YOE, validation.Min(0)),
@@ -420,7 +419,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err))
 		return status
 	}
-	
+
 	lastPendingDiff, lastPendingDiffId := getLastDiff(client, ctx, userId, "PENDING")
 	if lastPendingDiff != res && userData != res {
 		if lastPendingDiffId != "" {
