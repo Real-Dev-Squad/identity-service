@@ -229,7 +229,6 @@ func (res Res) Validate() error {
 		validation.Field(&res.Designation, validation.Required),
 		validation.Field(&res.GithubId, validation.Required),
 		validation.Field(&res.LinkedIn, validation.Required),
-		validation.Field(&res.InstagramId, validation.Required),
 		validation.Field(&res.Website, is.URL))
 }
 
