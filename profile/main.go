@@ -80,6 +80,7 @@ type structProfilesSkipped struct {
 	ChaincodeNotFound                  []string
 	ProfileServiceBlocked              []string
 	UserDataTypeError                  []string
+	ValidationError                    []string
 	OtherError                         []string
 }
 
@@ -544,6 +545,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 			profilesSkipped.UnAuthenticatedAccessToProfileData = append(profilesSkipped.UnAuthenticatedAccessToProfileData, username)
 		} else if status == Constants["SKIPPED_OTHER_ERROR"] {
 			profilesSkipped.OtherError = append(profilesSkipped.OtherError, username)
+		} else if status == Constants["SKIPPED_VALIDATION_ERROR"] {
+			profilesSkipped.ValidationError = append(profilesSkipped.ValidationError, username)
 		} else {
 			profileDiffsStored = append(profileDiffsStored, username)
 		}
@@ -610,6 +613,10 @@ func getReport(totalProfilesChecked int, profileDiffsStored []string, profilesSk
 			"UserDataTypeError": map[string]interface{}{
 				"count":     len(profilesSkipped.UserDataTypeError),
 				"usernames": profilesSkipped.UserDataTypeError,
+			},
+			"ValidationError": map[string]interface{}{
+				"count":     len(profilesSkipped.ValidationError),
+				"usernames": profilesSkipped.ValidationError,
 			},
 			"OtherError": map[string]interface{}{
 				"count":     len(profilesSkipped.OtherError),
