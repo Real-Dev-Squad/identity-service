@@ -20,6 +20,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+
+	// validation packages
+	"github.com/go-ozzo/ozzo-validation/v4"
+	"github.com/go-ozzo/ozzo-validation/v4/is"
 )
 
 /*
@@ -76,6 +80,7 @@ type structProfilesSkipped struct {
 	ChaincodeNotFound                  []string
 	ProfileServiceBlocked              []string
 	UserDataTypeError                  []string
+	ValidationError                    []string
 	OtherError                         []string
 }
 
@@ -159,6 +164,7 @@ var Constants map[string]string = map[string]string{
 	"SKIPPED_SAME_LAST_PENDING_DIFF":                                "skippedSameLastPendingDiff",
 	"SKIPPED_CURRENT_USER_DATA_SAME_AS_DIFF":                        "skippedCurrentUserDataSameAsDiff",
 	"SKIPPED_OTHER_ERROR":                                           "skippedOtherError",
+	"SKIPPED_VALIDATION_ERROR":                                      "validation error",
 }
 
 /*
@@ -209,6 +215,20 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 	}
 
 	return client, nil
+}
+
+func (res Res) Validate() error {
+	return validation.ValidateStruct(&res,
+		validation.Field(&res.FirstName, validation.Required),
+		validation.Field(&res.LastName, validation.Required),
+		validation.Field(&res.Phone, validation.Required, is.Digit),
+		validation.Field(&res.Email, validation.Required, is.Email),
+		validation.Field(&res.YOE, validation.Min(0)),
+		validation.Field(&res.Company, validation.Required),
+		validation.Field(&res.Designation, validation.Required),
+		validation.Field(&res.GithubId, validation.Required),
+		validation.Field(&res.LinkedIn, validation.Required),
+		validation.Field(&res.Website, is.URL))
 }
 
 /*
@@ -391,6 +411,15 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		return status
 	}
 
+	err = res.Validate()
+
+	if err != nil {
+		status = Constants["SKIPPED_VALIDATION_ERROR"]
+		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err))
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err))
+		return status
+	}
+
 	lastPendingDiff, lastPendingDiffId := getLastDiff(client, ctx, userId, "PENDING")
 	if lastPendingDiff != res && userData != res {
 		if lastPendingDiffId != "" {
@@ -514,6 +543,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 			profilesSkipped.UnAuthenticatedAccessToProfileData = append(profilesSkipped.UnAuthenticatedAccessToProfileData, username)
 		} else if status == Constants["SKIPPED_OTHER_ERROR"] {
 			profilesSkipped.OtherError = append(profilesSkipped.OtherError, username)
+		} else if status == Constants["SKIPPED_VALIDATION_ERROR"] {
+			profilesSkipped.ValidationError = append(profilesSkipped.ValidationError, username)
 		} else {
 			profileDiffsStored = append(profileDiffsStored, username)
 		}
@@ -580,6 +611,10 @@ func getReport(totalProfilesChecked int, profileDiffsStored []string, profilesSk
 			"UserDataTypeError": map[string]interface{}{
 				"count":     len(profilesSkipped.UserDataTypeError),
 				"usernames": profilesSkipped.UserDataTypeError,
+			},
+			"ValidationError": map[string]interface{}{
+				"count":     len(profilesSkipped.ValidationError),
+				"usernames": profilesSkipped.ValidationError,
 			},
 			"OtherError": map[string]interface{}{
 				"count":     len(profilesSkipped.OtherError),
