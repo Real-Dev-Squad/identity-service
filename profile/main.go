@@ -220,8 +220,8 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 
 func (res Res) Validate() error {
 	return validation.ValidateStruct(&res,
-		validation.Field(&res.FirstName, validation.Length(3, 50)),
-		validation.Field(&res.LastName, validation.Required, validation.Length(3, 50)),
+		validation.Field(&res.FirstName,validation.Required),
+		validation.Field(&res.LastName, validation.Required,),
 		validation.Field(&res.Phone, validation.Required, is.Digit),
 		validation.Field(&res.Email, validation.Required, is.Email),
 		validation.Field(&res.YOE, validation.Min(0)),
