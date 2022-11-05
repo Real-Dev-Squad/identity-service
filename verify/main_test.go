@@ -20,12 +20,12 @@ func TestHandler(t *testing.T) {
 		expect  string
 		err     error
 	}{
-		{
+		// {
 			// Format
 			// request: events.APIGatewayProxyRequest{Body: `{ "userId": "ACD" }`},
 			// expect:  "Verification Process Done",
 			// err:     nil,
-		},
+		// },
 	}
 
 	ctx := context.Background()
