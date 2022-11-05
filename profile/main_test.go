@@ -21,11 +21,11 @@ func TestHandler(t *testing.T) {
 		err     error
 	}{
 		// Format
-		// {
-		// 	request: events.APIGatewayProxyRequest{},
-		// 	expect:  "Verification Process Done",
-		// 	err:     nil,
-		// },
+		{
+			request: events.APIGatewayProxyRequest{},
+			expect:  "Verification Process Done",
+			err:     nil,
+		},
 	}
 
 	ctx := context.Background()
@@ -47,7 +47,7 @@ func TestHandler(t *testing.T) {
 	for _, test := range tests {
 		response, err := d.handler(test.request)
 		assert.IsType(t, test.err, err)
-		assert.Equal(t, test.expect, response.Body)
+		assert.Equal(t, test.expect, response)
 	}
 
 }
