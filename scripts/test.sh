@@ -4,11 +4,11 @@ go test -v
 npx kill-port 8090
 cd ../verify
 go mod tidy
-firebase --project="test" emulators:exec "go test -v"
+npx firebase --project="test" emulators:exec "go test"
 npx kill-port 8090
 cd ../profile
 go mod tidy
-if (firebase --project="test" emulators:exec "go test -v"); then
+if (npx firebase --project="test" emulators:exec "go test"); then
     echo "Exited Success"
 else
     exit 1
