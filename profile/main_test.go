@@ -21,11 +21,11 @@ func TestHandler(t *testing.T) {
 		err     error
 	}{
 		// Format
-		{
-			request: events.APIGatewayProxyRequest{},
-			expect:  "Verification Process Done",
-			err:     nil,
-		},
+		// {
+		// 	request: events.APIGatewayProxyRequest{},
+		// 	expect:  "Verification Process Done",
+		// 	err:     nil,
+		// },
 	}
 
 	ctx := context.Background()
