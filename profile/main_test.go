@@ -26,7 +26,7 @@ func TestHandler(t *testing.T) {
 		// 	expect:  "Verification Process Done",
 		// 	err:     nil,
 		// },
-	}
+	} 
 
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "test")
