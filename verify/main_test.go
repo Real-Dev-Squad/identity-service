@@ -8,6 +8,9 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/stretchr/testify/assert"
+
+	"fmt"
+	"google.golang.org/api/iterator"
 )
 
 func TestHandler(t *testing.T) {
@@ -15,18 +18,7 @@ func TestHandler(t *testing.T) {
 	os.Setenv("environment", "test")
 	defer os.Unsetenv("environment")
 
-	tests := []struct {
-		request events.APIGatewayProxyRequest
-		expect  string
-		err     error
-	}{
-		// {
-			// Format
-			// request: events.APIGatewayProxyRequest{Body: `{ "userId": "ACD" }`},
-			// expect:  "Verification Process Done",
-			// err:     nil,
-		// },
-	}
+	var RefId string = ""
 
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "test")
@@ -34,10 +26,38 @@ func TestHandler(t *testing.T) {
 		return
 	}
 
-	client.Collection("users").Doc("ACD").Set(ctx, map[string]interface{}{
-		"chaincode":  "ABCD",
-		"profileURL": "https://identity.dev",
+	client.Collection("users").Add(ctx, map[string]interface{}{
+		"chaincode":  "abcdefgh",
+		"profileURL": "https://96phoonyw3.execute-api.us-east-2.amazonaws.com/Prod",
 	})
+
+	fmt.Println("All users:")
+	iter := client.Collection("users").Documents(ctx)
+	for {
+			doc, err := iter.Next()
+			if err == iterator.Done {
+					break
+			}
+			if err != nil {
+					break
+			}
+			RefId = doc.Ref.ID
+			fmt.Println(doc.Ref.ID)
+			fmt.Println(doc.Data())
+	}
+
+	tests := []struct {
+		request events.APIGatewayProxyRequest
+		expect  string
+		err     error
+	}{
+		{
+			// Format
+			request: events.APIGatewayProxyRequest{Body: fmt.Sprintf(`{ "userId": "%s" }`, RefId)},
+			expect:  "Verification Process Done",
+			err:     nil,
+		},
+	}
 
 	d := deps{
 		client: client,
