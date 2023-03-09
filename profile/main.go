@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -25,6 +26,8 @@ import (
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 )
+
+var wg sync.WaitGroup
 
 /*
  Structures
@@ -445,11 +448,92 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	return status
 }
 
+func callProfileService(client *firestore.Client, ctx context.Context, doc *firestore.DocumentSnapshot, profilesSkipped *structProfilesSkipped, profileDiffsStored *[]string) {
+	defer wg.Done()
+	var userId string = doc.Ref.ID
+	var userUrl string
+	var chaincode string
+	var username string
+
+	if str, ok := doc.Data()["username"].(string); ok {
+		username = str
+	}
+
+	if str, ok := doc.Data()["profileURL"].(string); ok {
+		userUrl = str
+	} else {
+		profilesSkipped.ProfileURL = append(profilesSkipped.ProfileURL, username)
+		logProfileSkipped(client, ctx, userId, "Profile URL not available")
+		setProfileStatusBlocked(client, ctx, userId, "Profile URL not available")
+		return
+	}
+
+	if str, ok := doc.Data()["chaincode"].(string); ok {
+		if str == "" {
+			profilesSkipped.ProfileServiceBlocked = append(profilesSkipped.ProfileServiceBlocked, username)
+			logProfileSkipped(client, ctx, userId, "Profile Service Blocked or Chaincode is empty")
+			setProfileStatusBlocked(client, ctx, userId, "Profile Service Blocked or Chaincode is empty")
+			return
+		}
+		chaincode = str
+	} else {
+		profilesSkipped.ChaincodeNotFound = append(profilesSkipped.ChaincodeNotFound, username)
+		logProfileSkipped(client, ctx, userId, "Chaincode Not Found")
+		setProfileStatusBlocked(client, ctx, userId, "Chaincode Not Found")
+		return
+	}
+
+	if userUrl[len(userUrl)-1] != '/' {
+		userUrl = userUrl + "/"
+	}
+	var isServiceRunning bool
+	_, err := http.Get(userUrl + "health")
+	if err != nil {
+		isServiceRunning = false
+	} else {
+		isServiceRunning = true
+	}
+
+	logHealth(client, ctx, userId, isServiceRunning)
+	if !isServiceRunning {
+		profilesSkipped.ServiceDown = append(profilesSkipped.ServiceDown, username)
+		logProfileSkipped(client, ctx, userId, "Profile Service Down")
+		setProfileStatusBlocked(client, ctx, userId, "Profile Service Down")
+		return
+	}
+
+	var userData Diff
+	err = doc.DataTo(&userData)
+	if err != nil {
+		profilesSkipped.UserDataTypeError = append(profilesSkipped.UserDataTypeError, username+" Error: "+fmt.Sprintln(err))
+		logProfileSkipped(client, ctx, userId, "UserData Type Error: "+fmt.Sprintln(err))
+		return
+	}
+
+	status := getdata(client, ctx, userId, userUrl, chaincode, diffToRes(userData))
+	if status == Constants["SKIPPED_SAME_LAST_PENDING_DIFF"] {
+		profilesSkipped.SameAsLastPendingDiff = append(profilesSkipped.SameAsLastPendingDiff, username)
+	} else if status == Constants["SKIPPED_CURRENT_USER_DATA_SAME_AS_DIFF"] {
+		profilesSkipped.CurrentUserDataSameAsDiff = append(profilesSkipped.CurrentUserDataSameAsDiff, username)
+	} else if status == Constants["SKIPPED_SAME_LAST_REJECTED_DIFF"] {
+		profilesSkipped.SameAsLastRejectedDiff = append(profilesSkipped.SameAsLastRejectedDiff, username)
+	} else if status == Constants["PROFILE_SKIPPED_DUE_TO_ERROR_IN_GETTING_PROFILE_DATA"] {
+		profilesSkipped.ErrorInGettingProfileData = append(profilesSkipped.ErrorInGettingProfileData, username)
+	} else if status == Constants["PROFILE_SKIPPED_DUE_TO_UNAUTHENTICATED_ACCESS_TO_PROFILE_DATA"] {
+		profilesSkipped.UnAuthenticatedAccessToProfileData = append(profilesSkipped.UnAuthenticatedAccessToProfileData, username)
+	} else if status == Constants["SKIPPED_OTHER_ERROR"] {
+		profilesSkipped.OtherError = append(profilesSkipped.OtherError, username)
+	} else if status == Constants["SKIPPED_VALIDATION_ERROR"] {
+		profilesSkipped.ValidationError = append(profilesSkipped.ValidationError, username)
+	} else {
+		*profileDiffsStored = append(*profileDiffsStored, username)
+	}
+}
+
 /*
  Controller
 */
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-
 	ctx := context.Background()
 	client, err := initializeFirestoreClient(ctx)
 	if err != nil {
@@ -470,94 +554,17 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 			log.Fatalf("Failed to iterate: %v", err)
 		}
 		totalProfilesChecked += 1
-		var userId string = doc.Ref.ID
-		var userUrl string
-		var chaincode string
-		var username string
-
-		if str, ok := doc.Data()["username"].(string); ok {
-			username = str
-		}
-
-		if str, ok := doc.Data()["profileURL"].(string); ok {
-			userUrl = str
-		} else {
-			profilesSkipped.ProfileURL = append(profilesSkipped.ProfileURL, username)
-			logProfileSkipped(client, ctx, userId, "Profile URL not available")
-			setProfileStatusBlocked(client, ctx, userId, "Profile URL not available")
-			continue
-		}
-
-		if str, ok := doc.Data()["chaincode"].(string); ok {
-			if str == "" {
-				profilesSkipped.ProfileServiceBlocked = append(profilesSkipped.ProfileServiceBlocked, username)
-				logProfileSkipped(client, ctx, userId, "Profile Service Blocked or Chaincode is empty")
-				setProfileStatusBlocked(client, ctx, userId, "Profile Service Blocked or Chaincode is empty")
-				continue
-			}
-			chaincode = str
-		} else {
-			profilesSkipped.ChaincodeNotFound = append(profilesSkipped.ChaincodeNotFound, username)
-			logProfileSkipped(client, ctx, userId, "Chaincode Not Found")
-			setProfileStatusBlocked(client, ctx, userId, "Chaincode Not Found")
-			continue
-		}
-
-		if userUrl[len(userUrl)-1] != '/' {
-			userUrl = userUrl + "/"
-		}
-		var isServiceRunning bool
-		_, err = http.Get(userUrl + "health")
-		if err != nil {
-			isServiceRunning = false
-		} else {
-			isServiceRunning = true
-		}
-
-		logHealth(client, ctx, userId, isServiceRunning)
-		if !isServiceRunning {
-			profilesSkipped.ServiceDown = append(profilesSkipped.ServiceDown, username)
-			logProfileSkipped(client, ctx, userId, "Profile Service Down")
-			setProfileStatusBlocked(client, ctx, userId, "Profile Service Down")
-			continue
-		}
-
-		var userData Diff
-		err = doc.DataTo(&userData)
-		if err != nil {
-			profilesSkipped.UserDataTypeError = append(profilesSkipped.UserDataTypeError, username+" Error: "+fmt.Sprintln(err))
-			logProfileSkipped(client, ctx, userId, "UserData Type Error: "+fmt.Sprintln(err))
-			continue
-		}
-
-		status := getdata(client, ctx, userId, userUrl, chaincode, diffToRes(userData))
-		if status == Constants["SKIPPED_SAME_LAST_PENDING_DIFF"] {
-			profilesSkipped.SameAsLastPendingDiff = append(profilesSkipped.SameAsLastPendingDiff, username)
-		} else if status == Constants["SKIPPED_CURRENT_USER_DATA_SAME_AS_DIFF"] {
-			profilesSkipped.CurrentUserDataSameAsDiff = append(profilesSkipped.CurrentUserDataSameAsDiff, username)
-		} else if status == Constants["SKIPPED_SAME_LAST_REJECTED_DIFF"] {
-			profilesSkipped.SameAsLastRejectedDiff = append(profilesSkipped.SameAsLastRejectedDiff, username)
-		} else if status == Constants["PROFILE_SKIPPED_DUE_TO_ERROR_IN_GETTING_PROFILE_DATA"] {
-			profilesSkipped.ErrorInGettingProfileData = append(profilesSkipped.ErrorInGettingProfileData, username)
-		} else if status == Constants["PROFILE_SKIPPED_DUE_TO_UNAUTHENTICATED_ACCESS_TO_PROFILE_DATA"] {
-			profilesSkipped.UnAuthenticatedAccessToProfileData = append(profilesSkipped.UnAuthenticatedAccessToProfileData, username)
-		} else if status == Constants["SKIPPED_OTHER_ERROR"] {
-			profilesSkipped.OtherError = append(profilesSkipped.OtherError, username)
-		} else if status == Constants["SKIPPED_VALIDATION_ERROR"] {
-			profilesSkipped.ValidationError = append(profilesSkipped.ValidationError, username)
-		} else {
-			profileDiffsStored = append(profileDiffsStored, username)
-		}
+		wg.Add(1)
+		go callProfileService(client, ctx, doc, &profilesSkipped, &profileDiffsStored)
 	}
-
-	report := getReport(totalProfilesChecked, profileDiffsStored, profilesSkipped)
+	wg.Wait()
+	report := getReport(totalProfilesChecked, profileDiffsStored, profilesSkipped, elapsed)
 	reportjson, err := json.Marshal(report)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
 
 	defer client.Close()
-
 	return events.APIGatewayProxyResponse{
 		Body:       string(reportjson),
 		StatusCode: 200,
