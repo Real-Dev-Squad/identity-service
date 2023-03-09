@@ -558,7 +558,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		go callProfileService(client, ctx, doc, &profilesSkipped, &profileDiffsStored)
 	}
 	wg.Wait()
-	report := getReport(totalProfilesChecked, profileDiffsStored, profilesSkipped, elapsed)
+	report := getReport(totalProfilesChecked, profileDiffsStored, profilesSkipped)
 	reportjson, err := json.Marshal(report)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
