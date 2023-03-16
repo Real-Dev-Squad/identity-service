@@ -23,7 +23,25 @@ import (
 )
 
 /*
- Structures
+HTTPClient interface that allows us perform mocking
+*/
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+/*
+Client to use inplace of http.Client
+*/
+var (
+	Client HTTPClient
+)
+
+func init() {
+	Client = &http.Client{}
+}
+
+/*
+Structures
 */
 type Log struct {
 	Type      string                 `firestore:"type,omitempty"`
@@ -83,7 +101,7 @@ type structProfilesSkipped struct {
 }
 
 /*
-	Structures Conversions
+Structures Conversions
 */
 func diffToRes(diff Diff) Res {
 	return Res{
@@ -143,7 +161,7 @@ func diffToMap(diff Diff) map[string]interface{} {
 }
 
 /*
- Setting Constants Map
+Setting Constants Map
 */
 var Constants map[string]string = map[string]string{
 	"ENV_DEVELOPMENT":         "DEVELOPMENT",
@@ -164,7 +182,7 @@ var Constants map[string]string = map[string]string{
 }
 
 /*
- Setting Firestore Key for development/production
+Setting Firestore Key for development/production
 */
 func getFirestoreKey() string {
 	if os.Getenv(("environment")) == Constants["ENV_DEVELOPMENT"] {
@@ -196,7 +214,7 @@ func getFirestoreKey() string {
 */
 
 /*
- Function to initialize the firestore client
+Function to initialize the firestore client
 */
 func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 	sa := option.WithCredentialsJSON([]byte(getFirestoreKey()))
@@ -218,7 +236,7 @@ func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 */
 
 /*
- Logs the health of the user's service
+Logs the health of the user's service
 */
 func logHealth(client *firestore.Client, ctx context.Context, userId string, isServiceRunning bool) {
 	newLog := Log{
@@ -236,7 +254,7 @@ func logHealth(client *firestore.Client, ctx context.Context, userId string, isS
 }
 
 /*
- Logs the status of the user's profileDiff
+Logs the status of the user's profileDiff
 */
 func logProfileSkipped(client *firestore.Client, ctx context.Context, userId string, reason string) {
 	newLog := Log{
@@ -268,7 +286,7 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 }
 
 /*
- Function for setting the profileStatus in user object in firestore
+Function for setting the profileStatus in user object in firestore
 */
 func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string) {
 	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
@@ -291,7 +309,7 @@ func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, user
 }
 
 /*
- sets the user's profile diff to not approved
+sets the user's profile diff to not approved
 */
 func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId string) {
 	client.Collection("profileDiffs").Doc(lastdiffId).Set(ctx, map[string]interface{}{
@@ -300,7 +318,7 @@ func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId st
 }
 
 /*
- Get the last profile diff of the user
+Get the last profile diff of the user
 */
 func getLastDiff(client *firestore.Client, ctx context.Context, userId string, approval string) (Res, string) {
 	query := client.Collection("profileDiffs").Where("userId", "==", userId).Where("approval", "==", approval).OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
@@ -324,7 +342,7 @@ func getLastDiff(client *firestore.Client, ctx context.Context, userId string, a
 }
 
 /*
- Get the user's profile data
+Get the user's profile data
 */
 func getUserData(client *firestore.Client, ctx context.Context, userId string) Res {
 	dsnap, err := client.Collection("users").Doc(userId).Get(ctx)
@@ -341,7 +359,7 @@ func getUserData(client *firestore.Client, ctx context.Context, userId string) R
 }
 
 /*
- Generate and Store Profile Diff
+Generate and Store Profile Diff
 */
 func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string) {
 	var diff Diff = resToDiff(res, userId)
@@ -354,7 +372,7 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
 }
 
 /*
- Getting data from the user's service
+Getting data from the user's service
 */
 func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string) string {
 	var status string = Constants["STORED"]
@@ -364,10 +382,9 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		log.Fatal(err)
 	}
 
-	httpClient := &http.Client{}
 	req, _ := http.NewRequest("GET", userUrl, nil)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", string(hashedChaincode)))
-	resp, err := httpClient.Do(req)
+	resp, err := Client.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -422,7 +439,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 }
 
 /*
- Controller
+Controller
 */
 func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
