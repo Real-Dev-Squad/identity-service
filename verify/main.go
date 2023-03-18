@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -24,7 +25,7 @@ import (
 )
 
 /*
- Structures
+Structures
 */
 type Log struct {
 	Type      string                 `firestore:"type,omitempty"`
@@ -36,6 +37,24 @@ type Log struct {
 type deps struct {
 	client *firestore.Client
 	ctx    context.Context
+}
+
+/*
+HTTPClient interface that allows us perform mocking
+*/
+type HTTPClient interface {
+	Post(url string, contentType string, body io.Reader) (resp *http.Response, err error)
+}
+
+/*
+Client to use inplace of http.Client
+*/
+var (
+	Client HTTPClient
+)
+
+func init() {
+	Client = &http.Client{}
 }
 
 /*
@@ -70,7 +89,7 @@ func getFirestoreKey() string {
 }
 
 /*
- Function to initialize the firestore client
+Function to initialize the firestore client
 */
 func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 	var firestoreKey = getFirestoreKey()
@@ -123,7 +142,7 @@ func logVerification(client *firestore.Client, ctx context.Context, status strin
 }
 
 /*
- Function for setting the profileStatus in user object in firestore
+Function for setting the profileStatus in user object in firestore
 */
 func setProfileStatus(client *firestore.Client, ctx context.Context, id string, status string) error {
 	var newData = map[string]interface{}{
@@ -147,7 +166,7 @@ func setProfileStatus(client *firestore.Client, ctx context.Context, id string, 
 }
 
 /*
- Function to get the userData using userId
+Function to get the userData using userId
 */
 func getUserData(client *firestore.Client, ctx context.Context, userId string) (string, string, string, error) {
 	dsnap, err := client.Collection("users").Doc(userId).Get(ctx)
@@ -194,7 +213,7 @@ func getUserData(client *firestore.Client, ctx context.Context, userId string) (
 }
 
 /*
- Function to extract userId from the request body
+Function to extract userId from the request body
 */
 func getUserIdFromBody(body []byte) string {
 	type extractedBody struct {
@@ -207,7 +226,7 @@ func getUserIdFromBody(body []byte) string {
 }
 
 /*
-	Function to generate random string
+Function to generate random string
 */
 func randSalt(n int) string {
 	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
@@ -240,7 +259,7 @@ func verify(profileURL string, chaincode string) (string, error) {
 
 	reqBody := bytes.NewBuffer(postBody)
 
-	resp, err := http.Post(profileURL, "application/json", reqBody)
+	resp, err := Client.Post(profileURL, "application/json", reqBody)
 	if err != nil {
 		return "", err
 	}
@@ -261,7 +280,7 @@ func verify(profileURL string, chaincode string) (string, error) {
 }
 
 /*
- Main Handler Function
+Main Handler Function
 */
 func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
@@ -302,7 +321,7 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 }
 
 /*
- Starts the lambda (Entry Point)
+Starts the lambda (Entry Point)
 */
 func main() {
 	ctx := context.Background()
