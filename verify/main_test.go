@@ -27,12 +27,13 @@ func TestHandler(t *testing.T) {
 		if url == "https://96phoonyw3.execute-api.us-east-2.amazonaws.com/Prod" {
 			return &http.Response{
 				StatusCode: 200,
+				Body:       http.NoBody,
 			}, nil
 		}
 
 		return &http.Response{
 			StatusCode: 500,
-		}, fmt.Errorf("mock error")
+		}, fmt.Errorf("custom error")
 	}
 
 	os.Setenv("environment", "test")
