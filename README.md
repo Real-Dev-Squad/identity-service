@@ -70,6 +70,8 @@ We are using AWS SAM(Serverless Application Model) with [golang](https://go.dev/
 /healthCheck
 ```
 
+## State Machine Diagram
+
 ## Contributing
 Wish to contribute? You can find a detailed guide [here](./CONTRIBUTING.md)
 
