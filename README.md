@@ -71,6 +71,7 @@ We are using AWS SAM(Serverless Application Model) with [golang](https://go.dev/
 ```
 
 ## State Machine Diagram
+![statemachinediagram drawio](https://user-images.githubusercontent.com/45519620/228067673-914ee0c9-9980-48d9-a012-8c30872671ea.png)
 
 ## Contributing
 Wish to contribute? You can find a detailed guide [here](./CONTRIBUTING.md)
