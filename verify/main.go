@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -37,24 +36,6 @@ type Log struct {
 type deps struct {
 	client *firestore.Client
 	ctx    context.Context
-}
-
-/*
-HTTPClient interface that allows us perform mocking
-*/
-type HTTPClient interface {
-	Post(url string, contentType string, body io.Reader) (resp *http.Response, err error)
-}
-
-/*
-Client to use inplace of http.Client
-*/
-var (
-	Client HTTPClient
-)
-
-func init() {
-	Client = &http.Client{}
 }
 
 /*
@@ -259,7 +240,13 @@ func verify(profileURL string, chaincode string) (string, error) {
 
 	reqBody := bytes.NewBuffer(postBody)
 
-	resp, err := Client.Post(profileURL, "application/json", reqBody)
+	req, err := http.NewRequest("POST", profileURL, reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
