@@ -19,9 +19,6 @@ func TestSetProfileStatus(t *testing.T) {
 	// When status is BLOCKED, expect to set chaincode to empty string
 	ID := "1234"
 	profileStatus := "BLOCKED"
-	client.Collection("users").Doc(ID).Set(ctx, map[string]interface{}{
-		"profileStatus": profileStatus,
-	})
 	err := setProfileStatus(client, ctx, ID, profileStatus)
 	if err != nil {
 		t.Errorf("setProfileStatus returned an error: %v", err)
@@ -35,12 +32,9 @@ func TestSetProfileStatus(t *testing.T) {
 	assert.Equal(t, "", userDoc.Data()["chaincode"])
 	assert.Equal(t, profileStatus, userDoc.Data()["profileStatus"])
 
-	// if status is NOT BLOCKED, expect to set profile status without errors
+	// if status is VERIFIED / PENDING, expect to set profile status without errors
 	ID = "abcd"
 	profileStatus = "VERIFIED"
-	client.Collection("users").Doc(ID).Set(ctx, map[string]interface{}{
-		"profileStatus": profileStatus,
-	})
 	err = setProfileStatus(client, ctx, ID, profileStatus)
 	if err != nil {
 		t.Errorf("setProfileStatus returned an error: %v", err)
