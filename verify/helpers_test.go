@@ -24,8 +24,6 @@ func init() {
 }
 
 func TestSetProfileStatus(t *testing.T) {
-	defer cancel()
-
 	// When status is BLOCKED, expect to set chaincode to empty string
 	ID := "1234"
 	profileStatus := "BLOCKED"
