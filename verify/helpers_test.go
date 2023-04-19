@@ -8,12 +8,22 @@ import (
 	"testing"
 	"time"
 
+	"cloud.google.com/go/firestore"
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	ctx    context.Context
+	cancel context.CancelFunc
+	client *firestore.Client
+)
+
+func init() {
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	client = newFirestoreMockClient(ctx)
+}
+
 func TestSetProfileStatus(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	client := newFirestoreMockClient(ctx)
 	defer cancel()
 
 	// When status is BLOCKED, expect to set chaincode to empty string
@@ -49,8 +59,6 @@ func TestSetProfileStatus(t *testing.T) {
 }
 
 func TestGetUserData(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	client := newFirestoreMockClient(ctx)
 	defer cancel()
 
 	testCases := []struct {
