@@ -196,14 +196,22 @@ func getUserData(client *firestore.Client, ctx context.Context, userId string) (
 /*
 Function to extract userId from the request body
 */
-func getUserIdFromBody(body []byte) string {
+func getUserIdFromBody(body []byte) (string, error) {
 	type extractedBody struct {
 		UserId string `json:"userId"`
 	}
 
 	var e extractedBody
-	json.Unmarshal(body, &e)
-	return e.UserId
+	err := json.Unmarshal(body, &e)
+	if err != nil {
+		return "", err
+	}
+
+	if e.UserId == "" {
+		return "", errors.New("empty 'userId' property in request body")
+	}
+
+	return e.UserId, nil
 }
 
 /*
@@ -271,9 +279,9 @@ Main Handler Function
 */
 func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	var userId string = getUserIdFromBody([]byte(request.Body))
-	if userId == "" {
-		return events.APIGatewayProxyResponse{}, errors.New("no userId provided")
+	userId, err := getUserIdFromBody([]byte(request.Body))
+	if err != nil {
+		return events.APIGatewayProxyResponse{}, err
 	}
 
 	profileURL, profileStatus, chaincode, err := getUserData(d.client, d.ctx, userId)
