@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -18,9 +19,16 @@ var (
 	client *firestore.Client
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	client = newFirestoreMockClient(ctx)
+
+	code := m.Run()
+
+	cancel()
+	client.Close()
+
+	os.Exit(code)
 }
 
 func TestSetProfileStatus(t *testing.T) {
@@ -57,8 +65,6 @@ func TestSetProfileStatus(t *testing.T) {
 }
 
 func TestGetUserData(t *testing.T) {
-	defer cancel()
-
 	testCases := []struct {
 		name          string
 		userId        string
