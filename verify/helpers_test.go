@@ -130,32 +130,47 @@ func TestGetUserData(t *testing.T) {
 func TestGetUserIdFromBody(t *testing.T) {
 	// valid request body
 	body := []byte(`{"userId": "123"}`)
-	expected := "123"
+	expectedUserId := "123"
 
-	actual := getUserIdFromBody(body)
-
-	if actual != expected {
-		t.Errorf("getUserIdFromBody returned %v, expected %v", actual, expected)
+	actualUserId, err := getUserIdFromBody(body)
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if actualUserId != expectedUserId {
+		t.Errorf("Expected user ID '%s' but got '%s'", expectedUserId, actualUserId)
 	}
 
 	// empty request body
 	body = []byte(``)
-	expected = ""
+	expectedError := "unexpected end of JSON input"
 
-	actual = getUserIdFromBody(body)
+	_, err = getUserIdFromBody(body)
+	if err == nil {
+		t.Errorf("Expected error but got nil")
+	} else if err.Error() != expectedError {
+		t.Errorf("Expected error message '%s' but got '%s'", expectedError, err.Error())
+	}
 
-	if actual != expected {
-		t.Errorf("getUserIdFromBody returned %v, expected %v", actual, expected)
+	// empty userId
+	body = []byte(`{"userId": ""}`)
+	expectedError = "empty 'userId' property in request body"
+
+	_, err = getUserIdFromBody(body)
+	if err == nil {
+		t.Errorf("Expected error but got nil")
+	} else if err.Error() != expectedError {
+		t.Errorf("Expected error message '%s' but got '%s'", expectedError, err.Error())
 	}
 
 	// invalid request body
-	body = []byte(`{"invalidProperty": ""}`)
-	expected = ""
+	body = []byte(`{"userId": 123, "invalidProperty": "test"}`)
 
-	actual = getUserIdFromBody(body)
-
-	if actual != expected {
-		t.Errorf("getUserIdFromBody returned %v, expected %v", actual, expected)
+	_, err = getUserIdFromBody(body)
+	expectedError = "json: cannot unmarshal number into Go struct field extractedBody.userId of type string"
+	if err == nil {
+		t.Errorf("Expected error but got nil")
+	} else if err.Error() != expectedError {
+		t.Errorf("Expected error message '%s' but got '%s'", expectedError, err.Error())
 	}
 }
 
