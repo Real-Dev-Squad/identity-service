@@ -161,6 +161,7 @@ func TestGetUserIdFromBody(t *testing.T) {
 
 type testVerifyData struct {
 	name           string
+	path           string
 	chaincode      string
 	mockStatusCode int
 	mockResBody    string
@@ -172,6 +173,7 @@ func TestVerify(t *testing.T) {
 	testCases := []testVerifyData{
 		{
 			name:           "VERIFIED",
+			path:           "/profile-one",
 			chaincode:      "testchaincode",
 			mockStatusCode: http.StatusOK,
 			mockResBody:    `{"hash": "$2a$12$ScGc2Q0t0rqqSJK1E2W/WuaRVAchaVWdUqb1hQi21cFTnOVvlIdry"}`,
@@ -180,6 +182,7 @@ func TestVerify(t *testing.T) {
 		},
 		{
 			name:           "BLOCKED",
+			path:           "/profile-two",
 			chaincode:      "invalid",
 			mockStatusCode: http.StatusForbidden,
 			mockResBody:    `{"hash": "abcdefghijklmnopqrstuvwxyz"}`,
@@ -188,19 +191,27 @@ func TestVerify(t *testing.T) {
 		},
 	}
 
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/profile-one" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"hash": "$2a$12$ScGc2Q0t0rqqSJK1E2W/WuaRVAchaVWdUqb1hQi21cFTnOVvlIdry"}`))
+		}
+
+		if r.URL.Path == "/profile-two" {
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"hash": "abcdefghijklmnopqrstuvwxyz"}`))
+		}
+	}))
+
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(testCase.mockStatusCode)
-				w.Write([]byte(testCase.mockResBody))
-			}))
 
-			status, err := verify(server.URL+"/", testCase.chaincode)
+			status, err := verify(server.URL+testCase.path, testCase.chaincode)
 
 			assert.Equal(t, testCase.expectedStatus, status)
 			assert.Equal(t, testCase.expectedErr, err)
-
-			defer server.Close()
 		})
 	}
+
+	defer server.Close()
 }

@@ -33,27 +33,24 @@ func TestHandler(t *testing.T) {
 	client := newFirestoreMockClient(ctx)
 	defer cancel()
 
-	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/profile-two/verification" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"hash": "$2a$12$ScGc2Q0t0rqqSJK1E2W/WuaRVAchaVWdUqb1hQi21cFTnOVvlIdry"}`))
+		}
 	}))
-	defer server1.Close()
-
-	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"hash": "$2a$12$ScGc2Q0t0rqqSJK1E2W/WuaRVAchaVWdUqb1hQi21cFTnOVvlIdry"}`))
-	}))
-	defer server2.Close()
+	defer server.Close()
 
 	verifiedUserId := "123"
 	client.Collection("users").Doc(verifiedUserId).Set(ctx, map[string]interface{}{
 		"chaincode":     "abcdefgh",
-		"profileURL":    server1.URL,
+		"profileURL":    server.URL + "/profile-one",
 		"profileStatus": "VERIFIED",
 	})
 	unverifiedUserId := "321"
 	client.Collection("users").Doc(unverifiedUserId).Set(ctx, map[string]interface{}{
 		"chaincode":     "testchaincode",
-		"profileURL":    server2.URL,
+		"profileURL":    server.URL + "/profile-two",
 		"profileStatus": "BLOCKED",
 	})
 
@@ -79,7 +76,7 @@ func TestHandler(t *testing.T) {
 			name:    "no userId",
 			request: events.APIGatewayProxyRequest{Body: `{}`},
 			expect:  "",
-			err:     errors.New("no userId provided"),
+			err:     errors.New("empty 'userId' property in request body"),
 		},
 	}
 
@@ -91,7 +88,7 @@ func TestHandler(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			response, err := d.handler(testCase.request)
-			assert.IsType(t, testCase.err, err)
+			assert.Equal(t, testCase.err, err)
 			assert.Equal(t, testCase.expect, response.Body)
 		})
 	}
