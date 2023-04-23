@@ -76,7 +76,7 @@ func TestHandler(t *testing.T) {
 			name:    "no userId",
 			request: events.APIGatewayProxyRequest{Body: `{}`},
 			expect:  "",
-			err:     errors.New("empty 'userId' property in request body"),
+			err:     errors.New("no userId provided"),
 		},
 	}
 
