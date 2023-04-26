@@ -79,7 +79,7 @@ func TestHandler(t *testing.T) {
 			name:    "no userId",
 			request: events.APIGatewayProxyRequest{Body: `{}`},
 			expect:  "",
-			err:     errors.New("no userId provided"),
+			err:     errors.New("empty 'userId' property in request body"),
 		},
 	}
 
@@ -91,7 +91,7 @@ func TestHandler(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			response, err := d.handler(testCase.request)
-			assert.IsType(t, testCase.err, err)
+			assert.Equal(t, testCase.err, err)
 			assert.Equal(t, testCase.expect, response.Body)
 		})
 	}
