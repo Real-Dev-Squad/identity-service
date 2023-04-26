@@ -25,6 +25,23 @@ func newFirestoreMockClient(ctx context.Context) *firestore.Client {
 	return client
 }
 
+func addUsers(ctx context.Context, client *firestore.Client, users []map[string]interface{}) error {
+	for _, user := range users {
+		id, ok := user["userId"].(string)
+		if !ok {
+			return fmt.Errorf("userId is missing or not a string: %v", user)
+		}
+
+		delete(user, "userId")
+		if _, err := client.Collection("users").Doc(id).Set(ctx, user); err != nil {
+			return fmt.Errorf("cannot add user %s: %v", id, err)
+		}
+
+	}
+
+	return nil
+}
+
 func TestHandler(t *testing.T) {
 	os.Setenv("environment", "test")
 	defer os.Unsetenv("environment")
@@ -42,17 +59,15 @@ func TestHandler(t *testing.T) {
 	defer server.Close()
 
 	verifiedUserId := "123"
-	client.Collection("users").Doc(verifiedUserId).Set(ctx, map[string]interface{}{
-		"chaincode":     "abcdefgh",
-		"profileURL":    server.URL + "/profile-one",
-		"profileStatus": "VERIFIED",
-	})
 	unverifiedUserId := "321"
-	client.Collection("users").Doc(unverifiedUserId).Set(ctx, map[string]interface{}{
-		"chaincode":     "testchaincode",
-		"profileURL":    server.URL + "/profile-two",
-		"profileStatus": "BLOCKED",
-	})
+	users := []map[string]interface{}{
+		{"userId": verifiedUserId, "chaincode": "abcdefgh", "profileURL": server.URL + "/profile-one", "profileStatus": "VERIFIED"},
+		{"userId": unverifiedUserId, "chaincode": "testchaincode", "profileURL": server.URL + "/profile-two", "profileStatus": "BLOCKED"},
+	}
+
+	if err := addUsers(ctx, client, users); err != nil {
+		t.Fatalf("failed to add users: %v", err)
+	}
 
 	testCases := []struct {
 		name    string
