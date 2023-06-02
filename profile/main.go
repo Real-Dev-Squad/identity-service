@@ -23,7 +23,7 @@ import (
 	"google.golang.org/api/option"
 
 	// validation packages
-	"github.com/go-ozzo/ozzo-validation/v4"
+
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 )
 
@@ -40,19 +40,19 @@ type Log struct {
 }
 
 type Res struct {
-	FirstName   string `json:"first_name"`
-	LastName    string `json:"last_name"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone"`
-	YOE         int    `json:"yoe"`
-	Company     string `json:"company"`
-	Designation string `json:"designation"`
-	GithubId    string `json:"github_id"`
-	LinkedIn    string `json:"linkedin_id"`
-	TwitterId   string `json:"twitter_id"`
-	InstagramId string `json:"instagram_id"`
-	Website     string `json:"website"`
-	Dob         string `json:dob`
+	FirstName   string    `json:"first_name"`
+	LastName    string    `json:"last_name"`
+	Email       string    `json:"email"`
+	Phone       string    `json:"phone"`
+	YOE         int       `json:"yoe"`
+	Company     string    `json:"company"`
+	Designation string    `json:"designation"`
+	GithubId    string    `json:"github_id"`
+	LinkedIn    string    `json:"linkedin_id"`
+	TwitterId   string    `json:"twitter_id"`
+	InstagramId string    `json:"instagram_id"`
+	Website     string    `json:"website"`
+	Dob         time.Time `json:"dob"`
 }
 
 type Diff struct {
@@ -71,7 +71,7 @@ type Diff struct {
 	TwitterId   string    `firestore:"twitter_id,omitempty"`
 	InstagramId string    `firestore:"instagram_id,omitempty"`
 	Website     string    `firestore:"website,omitempty"`
-	Dob         string    `firestore:"dob,omitempty"`
+	Dob         time.Time `firestore:"dob,omitempty"`
 }
 
 type structProfilesSkipped struct {
