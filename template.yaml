@@ -67,3 +67,19 @@ Resources:
           Properties:
             Path: /verify
             Method: POST
+
+  CallProfileFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: call-profile/
+      Handler: call-profile
+      Runtime: go1.x
+      Architectures:
+        - x86_64
+      Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
+      Events:
+        CatchAll:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /call-profile
+            Method: POST
