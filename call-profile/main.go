@@ -241,12 +241,13 @@ func (res Res) Validate() error {
 /*
  Logs the health of the user's service
 */
-func logHealth(client *firestore.Client, ctx context.Context, userId string, isServiceRunning bool) {
+func logHealth(client *firestore.Client, ctx context.Context, userId string, isServiceRunning bool, sessionId string) {
 	newLog := Log{
 		Type:      Constants["PROFILE_SERVICE_HEALTH"],
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
+			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
 			"userId":         userId,
@@ -259,12 +260,13 @@ func logHealth(client *firestore.Client, ctx context.Context, userId string, isS
 /*
  Logs the status of the user's profileDiff
 */
-func logProfileSkipped(client *firestore.Client, ctx context.Context, userId string, reason string) {
+func logProfileSkipped(client *firestore.Client, ctx context.Context, userId string, reason string, sessionId string) {
 	newLog := Log{
 		Type:      Constants["PROFILE_SKIPPED"],
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
+			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
 			"userId": userId,
@@ -274,7 +276,7 @@ func logProfileSkipped(client *firestore.Client, ctx context.Context, userId str
 	client.Collection("logs").Add(ctx, newLog)
 }
 
-func logProfileStored(client *firestore.Client, ctx context.Context, userId string) {
+func logProfileStored(client *firestore.Client, ctx context.Context, userId string, sessionId string) {
 	newLog := Log{
 		Type:      Constants["PROFILE_DIFF_STORED"],
 		Timestamp: time.Now(),
@@ -283,6 +285,7 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 		},
 		Body: map[string]interface{}{
 			"userId": userId,
+			"sessionId": sessionId,
 		},
 	}
 	client.Collection("logs").Add(ctx, newLog)
@@ -291,7 +294,7 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 /*
  Function for setting the profileStatus in user object in firestore
 */
-func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string) {
+func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string, sessionId string) {
 	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
 		"profileStatus": Constants["STATUS_BLOCKED"],
 		"chaincode":     "",
@@ -302,6 +305,7 @@ func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, user
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
+			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
 			"userId": userId,
@@ -353,21 +357,20 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
 	if err != nil {
 		log.Fatal(err)
 	} else {
-		logProfileStored(client, ctx, userId)
+		logProfileStored(client, ctx, userId, sessionId)
 	}
 }
 
 /*
  Getting data from the user's service
 */
-func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string, userData Res) string {
+func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string, userData Res, sessionId string) string {
 	var status string = ""
 	userUrl = userUrl + "profile"
 	hashedChaincode, err := bcrypt.GenerateFromPassword([]byte(chaincode), bcrypt.DefaultCost)
 	if err != nil {
-		// status = Constants["SKIPPED_OTHER_ERROR"]
-		// logProfileSkipped(client, ctx, userId, fmt.Sprintln(err))
-		// setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err))
+		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
 		return "chaincode not encrypted"
 	}
 
@@ -376,22 +379,19 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", string(hashedChaincode)))
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		// status = Constants["SKIPPED_OTHER_ERROR"]
-		// logProfileSkipped(client, ctx, userId, fmt.Sprintln(err))
-		// setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err))
+		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
 		return "error getting profile data"
 	}
 	if resp.StatusCode == 401 {
-		// status = Constants["PROFILE_SKIPPED_DUE_TO_UNAUTHENTICATED_ACCESS_TO_PROFILE_DATA"]
-		// logProfileSkipped(client, ctx, userId, "Unauthenticated Access to Profile Data")
-		// setProfileStatusBlocked(client, ctx, userId, "Unauthenticated Access to Profile Data")
+		logProfileSkipped(client, ctx, userId, "Unauthenticated Access to Profile Data", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Unauthenticated Access to Profile Data", sessionId)
 		resp.Body.Close()
 		return "unauthenticated access to profile data"
 	}
 	if resp.StatusCode != 200 {
-		// status = Constants["PROFILE_SKIPPED_DUE_TO_ERROR_IN_GETTING_PROFILE_DATA"]
-		// logProfileSkipped(client, ctx, userId, "Error in getting Profile Data")
-		// setProfileStatusBlocked(client, ctx, userId, "Error in getting Profile Data")
+		logProfileSkipped(client, ctx, userId, "Error in getting Profile Data", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Error in getting Profile Data", sessionId)
 		resp.Body.Close()
 		return "error in getting profile data"
 	}
@@ -400,26 +400,23 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 
 	r, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		// status = Constants["SKIPPED_OTHER_ERROR"]
-		// logProfileSkipped(client, ctx, userId, fmt.Sprintln(err))
-		// setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err))
+		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
 		return "error reading profile data"
 	}
 	var res Res
 	err = json.Unmarshal([]byte(r), &res)
 	if err != nil {
-		// status = Constants["SKIPPED_OTHER_ERROR"]
-		// logProfileSkipped(client, ctx, userId, fmt.Sprintln(err))
-		// setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err))
+		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
 		return "error converting data to json"
 	}
 
 	err = res.Validate()
 
 	if err != nil {
-		// status = Constants["SKIPPED_VALIDATION_ERROR"]
-		// logProfileSkipped(client, ctx, userId, fmt.Sprintln(err))
-		// setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err))
+		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
 		return fmt.Sprintf("error in validation: ", err)
 	}
 
@@ -433,11 +430,11 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 			generateAndStoreDiff(client, ctx, res, userId)
 		} else {
 			status = "same last rejected diff " + lastRejectedDiffId
-			// logProfileSkipped(client, ctx, userId, "Last Rejected Diff is same as New Profile Data. Rejected Diff Id: "+lastRejectedDiffId)
+			logProfileSkipped(client, ctx, userId, "Last Rejected Diff is same as New Profile Data. Rejected Diff Id: "+lastRejectedDiffId, sessionId)
 		}
 	} else if userData == res {
 		status = "same data exists"
-		// logProfileSkipped(client, ctx, userId, "Current User Data is same as New Profile Data")
+		logProfileSkipped(client, ctx, userId, "Current User Data is same as New Profile Data", sessionId)
 		if lastPendingDiffId != "" {
 			setNotApproved(client, ctx, lastPendingDiffId)
 		}
@@ -454,15 +451,12 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 func getUserIdFromBody(body []byte) string {
 	type extractedBody struct {
 		UserId string `json:"userId"`
-		// Username string `json:"username"`
-		// Chaincode string `json:"chaincode"`
-		// UserUrl string `json:"userUrl"`
-		// ReportId string `json:"reportId"`
+		SessionId string `json:"sessionId"`
 	}
 
 	var e extractedBody
 	json.Unmarshal(body, &e)
-	return e.UserId
+	return e.UserId, e.SessionId
 }
 
 /*
@@ -475,7 +469,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	var userId string = getUserIdFromBody([]byte(request.Body))
+	var userId, sessionId string = getUserIdFromBody([]byte(request.Body))
 	if userId == "" {
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No UserID",
@@ -496,9 +490,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	if str, ok := dsnap.Data()["profileURL"].(string); ok {
 		userUrl = str
 	} else {
-		// profilesSkipped.ProfileURL = append(profilesSkipped.ProfileURL, username)
-		// logProfileSkipped(client, ctx, userId, "Profile URL not available")
-		// setProfileStatusBlocked(client, ctx, userId, "Profile URL not available")
+		logProfileSkipped(client, ctx, userId, "Profile URL not available", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Profile URL not available", sessionId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No Profile URL",
 			StatusCode: 200,
@@ -507,9 +500,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	if str, ok := dsnap.Data()["chaincode"].(string); ok {
 		if str == "" {
-			// profilesSkipped.ProfileServiceBlocked = append(profilesSkipped.ProfileServiceBlocked, username)
-			// logProfileSkipped(client, ctx, userId, "Profile Service Blocked or Chaincode is empty")
-			// setProfileStatusBlocked(client, ctx, userId, "Profile Service Blocked or Chaincode is empty")
+			logProfileSkipped(client, ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId)
+			setProfileStatusBlocked(client, ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId)
 			return events.APIGatewayProxyResponse{
 				Body:       "Profile Skipped Profile Service Blocked",
 				StatusCode: 200,
@@ -517,9 +509,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}
 		chaincode = str
 	} else {
-		// profilesSkipped.ChaincodeNotFound = append(profilesSkipped.ChaincodeNotFound, username)
-		// logProfileSkipped(client, ctx, userId, "Chaincode Not Found")
-		// setProfileStatusBlocked(client, ctx, userId, "Chaincode Not Found")
+		logProfileSkipped(client, ctx, userId, "Chaincode Not Found", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Chaincode Not Found", sessionId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped Chaincode Not Found",
 			StatusCode: 200,
@@ -529,8 +520,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	var userData Diff
 	err = dsnap.DataTo(&userData)
 	if err != nil {
-		// profilesSkipped.UserDataTypeError = append(profilesSkipped.UserDataTypeError, username+" Error: "+fmt.Sprintln(err))
-		// logProfileSkipped(client, ctx, userId, "UserData Type Error: "+fmt.Sprintln(err))
+		logProfileSkipped(client, ctx, userId, "UserData Type Error: "+fmt.Sprintln(err), sessionId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No User Data",
 			StatusCode: 200,
@@ -548,37 +538,17 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		isServiceRunning = true
 	}
 
-	// logHealth(client, ctx, userId, isServiceRunning)
+	logHealth(client, ctx, userId, isServiceRunning, sessionId)
 	if !isServiceRunning {
-		// profilesSkipped.ServiceDown = append(profilesSkipped.ServiceDown, username)
-		// logProfileSkipped(client, ctx, userId, "Profile Service Down")
-		// setProfileStatusBlocked(client, ctx, userId, "Profile Service Down")
+		logProfileSkipped(client, ctx, userId, "Profile Service Down", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Profile Service Down", sessionId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped Service Down",
 			StatusCode: 200,
 		}, nil
 	}
 
-	fmt.Println(userId, userUrl, chaincode, userUrl, username, isServiceRunning)
-
-	dataErr := getdata(client, ctx, userId, userUrl, chaincode, diffToRes(userData))
-	// if status == Constants["SKIPPED_SAME_LAST_PENDING_DIFF"] {
-	// 	profilesSkipped.SameAsLastPendingDiff = append(profilesSkipped.SameAsLastPendingDiff, username)
-	// } else if status == Constants["SKIPPED_CURRENT_USER_DATA_SAME_AS_DIFF"] {
-	// 	profilesSkipped.CurrentUserDataSameAsDiff = append(profilesSkipped.CurrentUserDataSameAsDiff, username)
-	// } else if status == Constants["SKIPPED_SAME_LAST_REJECTED_DIFF"] {
-	// 	profilesSkipped.SameAsLastRejectedDiff = append(profilesSkipped.SameAsLastRejectedDiff, username)
-	// } else if status == Constants["PROFILE_SKIPPED_DUE_TO_ERROR_IN_GETTING_PROFILE_DATA"] {
-	// 	profilesSkipped.ErrorInGettingProfileData = append(profilesSkipped.ErrorInGettingProfileData, username)
-	// } else if status == Constants["PROFILE_SKIPPED_DUE_TO_UNAUTHENTICATED_ACCESS_TO_PROFILE_DATA"] {
-	// 	profilesSkipped.UnAuthenticatedAccessToProfileData = append(profilesSkipped.UnAuthenticatedAccessToProfileData, username)
-	// } else if status == Constants["SKIPPED_OTHER_ERROR"] {
-	// 	profilesSkipped.OtherError = append(profilesSkipped.OtherError, username)
-	// } else if status == Constants["SKIPPED_VALIDATION_ERROR"] {
-	// 	profilesSkipped.ValidationError = append(profilesSkipped.ValidationError, username)
-	// } else {
-	// 	*profileDiffsStored = append(*profileDiffsStored, username)
-	// }
+	dataErr := getdata(client, ctx, userId, userUrl, chaincode, diffToRes(userData), sessionId)
 	if dataErr != "" {
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped " + dataErr,
