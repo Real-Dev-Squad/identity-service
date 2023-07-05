@@ -23,14 +23,14 @@ import (
 	"google.golang.org/api/option"
 
 	// validation packages
-	"github.com/go-ozzo/ozzo-validation/v4"
+
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 )
 
 var wg sync.WaitGroup
 
 /*
- Structures
+Structures
 */
 type Log struct {
 	Type      string                 `firestore:"type,omitempty"`
@@ -40,18 +40,19 @@ type Log struct {
 }
 
 type Res struct {
-	FirstName   string `json:"first_name"`
-	LastName    string `json:"last_name"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone"`
-	YOE         int    `json:"yoe"`
-	Company     string `json:"company"`
-	Designation string `json:"designation"`
-	GithubId    string `json:"github_id"`
-	LinkedIn    string `json:"linkedin_id"`
-	TwitterId   string `json:"twitter_id"`
-	InstagramId string `json:"instagram_id"`
-	Website     string `json:"website"`
+	FirstName   string    `json:"first_name"`
+	LastName    string    `json:"last_name"`
+	Email       string    `json:"email"`
+	Phone       string    `json:"phone"`
+	YOE         int       `json:"yoe"`
+	Company     string    `json:"company"`
+	Designation string    `json:"designation"`
+	GithubId    string    `json:"github_id"`
+	LinkedIn    string    `json:"linkedin_id"`
+	TwitterId   string    `json:"twitter_id"`
+	InstagramId string    `json:"instagram_id"`
+	Website     string    `json:"website"`
+	Dob         time.Time `json:"dob"`
 }
 
 type Diff struct {
@@ -70,6 +71,7 @@ type Diff struct {
 	TwitterId   string    `firestore:"twitter_id,omitempty"`
 	InstagramId string    `firestore:"instagram_id,omitempty"`
 	Website     string    `firestore:"website,omitempty"`
+	Dob         time.Time `firestore:"dob,omitempty"`
 }
 
 type structProfilesSkipped struct {
@@ -88,7 +90,7 @@ type structProfilesSkipped struct {
 }
 
 /*
-	Structures Conversions
+Structures Conversions
 */
 func diffToRes(diff Diff) Res {
 	return Res{
@@ -104,6 +106,7 @@ func diffToRes(diff Diff) Res {
 		TwitterId:   diff.TwitterId,
 		InstagramId: diff.InstagramId,
 		Website:     diff.Website,
+		Dob:         diff.Dob,
 	}
 }
 
@@ -124,6 +127,7 @@ func resToDiff(res Res, userId string) Diff {
 		TwitterId:   res.TwitterId,
 		InstagramId: res.InstagramId,
 		Website:     res.Website,
+		Dob:         res.Dob,
 	}
 }
 
@@ -144,11 +148,12 @@ func diffToMap(diff Diff) map[string]interface{} {
 		"twitter_id":   diff.TwitterId,
 		"instagram_id": diff.InstagramId,
 		"website":      diff.Website,
+		"dob":          diff.Dob,
 	}
 }
 
 /*
- Setting Constants Map
+Setting Constants Map
 */
 var Constants map[string]string = map[string]string{
 	"ENV_DEVELOPMENT":         "DEVELOPMENT",
@@ -171,7 +176,7 @@ var Constants map[string]string = map[string]string{
 }
 
 /*
- Setting Firestore Key for development/production
+Setting Firestore Key for development/production
 */
 func getFirestoreKey() string {
 	if os.Getenv(("environment")) == Constants["ENV_DEVELOPMENT"] {
@@ -203,7 +208,7 @@ func getFirestoreKey() string {
 */
 
 /*
- Function to initialize the firestore client
+Function to initialize the firestore client
 */
 func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 	sa := option.WithCredentialsJSON([]byte(getFirestoreKey()))
@@ -231,7 +236,8 @@ func (res Res) Validate() error {
 		validation.Field(&res.Designation, validation.Required),
 		validation.Field(&res.GithubId, validation.Required),
 		validation.Field(&res.LinkedIn, validation.Required),
-		validation.Field(&res.Website, is.URL))
+		validation.Field(&res.Website, is.URL),
+		validation.Field(&res.Dob, validation.Required))
 }
 
 /*
@@ -239,7 +245,7 @@ func (res Res) Validate() error {
 */
 
 /*
- Logs the health of the user's service
+Logs the health of the user's service
 */
 func logHealth(client *firestore.Client, ctx context.Context, userId string, isServiceRunning bool) {
 	newLog := Log{
@@ -257,7 +263,7 @@ func logHealth(client *firestore.Client, ctx context.Context, userId string, isS
 }
 
 /*
- Logs the status of the user's profileDiff
+Logs the status of the user's profileDiff
 */
 func logProfileSkipped(client *firestore.Client, ctx context.Context, userId string, reason string) {
 	newLog := Log{
@@ -289,7 +295,7 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 }
 
 /*
- Function for setting the profileStatus in user object in firestore
+Function for setting the profileStatus in user object in firestore
 */
 func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string) {
 	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
@@ -312,7 +318,7 @@ func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, user
 }
 
 /*
- sets the user's profile diff to not approved
+sets the user's profile diff to not approved
 */
 func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId string) {
 	client.Collection("profileDiffs").Doc(lastdiffId).Set(ctx, map[string]interface{}{
@@ -321,7 +327,7 @@ func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId st
 }
 
 /*
- Get the last profile diff of the user
+Get the last profile diff of the user
 */
 func getLastDiff(client *firestore.Client, ctx context.Context, userId string, approval string) (Res, string) {
 	query := client.Collection("profileDiffs").Where("userId", "==", userId).Where("approval", "==", approval).OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
@@ -345,7 +351,7 @@ func getLastDiff(client *firestore.Client, ctx context.Context, userId string, a
 }
 
 /*
- Generate and Store Profile Diff
+Generate and Store Profile Diff
 */
 func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string) {
 	var diff Diff = resToDiff(res, userId)
@@ -358,7 +364,7 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
 }
 
 /*
- Getting data from the user's service
+Getting data from the user's service
 */
 func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string, userData Res) string {
 	var status string = Constants["STORED"]
@@ -531,7 +537,7 @@ func callProfileService(client *firestore.Client, ctx context.Context, doc *fire
 }
 
 /*
- Controller
+Controller
 */
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	ctx := context.Background()
