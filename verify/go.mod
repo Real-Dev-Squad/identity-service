@@ -1,4 +1,4 @@
-module main
+module verify
 
 go 1.17
 
@@ -7,7 +7,8 @@ require (
 	firebase.google.com/go v3.13.0+incompatible
 	github.com/aws/aws-lambda-go v1.28.0
 	github.com/aws/aws-sdk-go v1.42.51
-	golang.org/x/crypto v0.1.0
+	github.com/stretchr/testify v1.7.0
+	golang.org/x/crypto v0.0.0-20220210151621-f4118a5b28e2
 	google.golang.org/api v0.68.0
 )
 
@@ -16,11 +17,13 @@ require (
 	cloud.google.com/go/compute v1.2.0 // indirect
 	cloud.google.com/go/iam v0.1.1 // indirect
 	cloud.google.com/go/storage v1.20.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.7 // indirect
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
@@ -31,4 +34,5 @@ require (
 	google.golang.org/genproto v0.0.0-20220210181026-6fee9acbd336 // indirect
 	google.golang.org/grpc v1.44.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
