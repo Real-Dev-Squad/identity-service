@@ -351,7 +351,7 @@ func getLastDiff(client *firestore.Client, ctx context.Context, userId string, a
 /*
  Generate and Store Profile Diff
 */
-func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string) {
+func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string, sessionId string) {
 	var diff Diff = resToDiff(res, userId)
 	_, _, err := client.Collection("profileDiffs").Add(ctx, diffToMap(diff))
 	if err != nil {
@@ -427,7 +427,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		}
 		lastRejectedDiff, lastRejectedDiffId := getLastDiff(client, ctx, userId, Constants["NOT_APPROVED"])
 		if lastRejectedDiff != res {
-			generateAndStoreDiff(client, ctx, res, userId)
+			generateAndStoreDiff(client, ctx, res, userId, sessionId)
 		} else {
 			status = "same last rejected diff " + lastRejectedDiffId
 			logProfileSkipped(client, ctx, userId, "Last Rejected Diff is same as New Profile Data. Rejected Diff Id: "+lastRejectedDiffId, sessionId)
@@ -440,7 +440,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		}
 	} else {
 		status = "same last pending diff"
-		logProfileSkipped(client, ctx, userId, "Last Pending Diff is same as New Profile Data")
+		logProfileSkipped(client, ctx, userId, "Last Pending Diff is same as New Profile Data", sessionId)
 	}
 	return status
 }
@@ -448,7 +448,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 /*
  Function to extract userId from the request body
 */
-func getUserIdFromBody(body []byte) string {
+func getDataFromBody(body []byte) (string, string) {
 	type extractedBody struct {
 		UserId string `json:"userId"`
 		SessionId string `json:"sessionId"`
@@ -469,7 +469,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	var userId, sessionId string = getUserIdFromBody([]byte(request.Body))
+	var userId, sessionId string = getDataFromBody([]byte(request.Body))
 	if userId == "" {
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No UserID",
@@ -481,11 +481,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	var userUrl string
 	var chaincode string
-	var username string
-
-	if str, ok := dsnap.Data()["username"].(string); ok {
-		username = str
-	}
 
 	if str, ok := dsnap.Data()["profileURL"].(string); ok {
 		userUrl = str
