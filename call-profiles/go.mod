@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/firestore v1.10.0
 	firebase.google.com/go v3.13.0+incompatible
 	github.com/aws/aws-lambda-go v1.41.0
-	github.com/aws/aws-sdk-go v1.44.282
+	github.com/aws/aws-sdk-go v1.44.317
 	google.golang.org/api v0.127.0
 )
 

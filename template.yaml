@@ -13,6 +13,7 @@ Globals:
       Variables:
         firestoreCred: YourFirestoreCredentials
         environment: PRODUCTION
+        baseURL: https://toz7734555.execute-api.us-east-1.amazonaws.com/Prod
 
 Resources:
   HealthCheckFunction:
@@ -87,8 +88,8 @@ Resources:
   CallProfilesFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      CodeUri: callProfiles/
-      Handler: callProfiles
+      CodeUri: call-profiles/
+      Handler: call-profiles
       Runtime: go1.x
       Architectures:
         - x86_64

@@ -246,7 +246,7 @@ func logHealth(client *firestore.Client, ctx context.Context, userId string, isS
 		Type:      Constants["PROFILE_SERVICE_HEALTH"],
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
-			"userId": userId,
+			"userId":    userId,
 			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
@@ -265,7 +265,7 @@ func logProfileSkipped(client *firestore.Client, ctx context.Context, userId str
 		Type:      Constants["PROFILE_SKIPPED"],
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
-			"userId": userId,
+			"userId":    userId,
 			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
@@ -282,10 +282,10 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
+			"sessionId": sessionId
 		},
 		Body: map[string]interface{}{
 			"userId": userId,
-			"sessionId": sessionId,
 		},
 	}
 	client.Collection("logs").Add(ctx, newLog)
@@ -304,7 +304,7 @@ func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, user
 		Type:      Constants["PROFILE_SERVICE_BLOCKED"],
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
-			"userId": userId,
+			"userId":    userId,
 			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
@@ -450,7 +450,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 */
 func getDataFromBody(body []byte) (string, string) {
 	type extractedBody struct {
-		UserId string `json:"userId"`
+		UserId    string `json:"userId"`
 		SessionId string `json:"sessionId"`
 	}
 
