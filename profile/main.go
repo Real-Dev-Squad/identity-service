@@ -39,6 +39,11 @@ type Log struct {
 	Body      map[string]interface{} `firestore:"body,omitempty"`
 }
 
+type deps struct {
+	client *firestore.Client
+	ctx    context.Context
+}
+
 type Res struct {
 	FirstName   string `json:"first_name"`
 	LastName    string `json:"last_name"`
@@ -533,12 +538,10 @@ func callProfileService(client *firestore.Client, ctx context.Context, doc *fire
 /*
  Controller
 */
-func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	ctx := context.Background()
-	client, err := initializeFirestoreClient(ctx)
-	if err != nil {
-		return events.APIGatewayProxyResponse{}, err
-	}
+func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+
+	ctx := d.ctx
+	client := d.client
 
 	totalProfilesChecked := 0
 	profilesSkipped := structProfilesSkipped{}
@@ -633,5 +636,16 @@ func getReport(totalProfilesChecked int, profileDiffsStored []string, profilesSk
 }
 
 func main() {
-	lambda.Start(handler)
+	ctx := context.Background()
+	client, err := initializeFirestoreClient(ctx)
+	if err != nil {
+		return
+	}
+
+	d := deps{
+		client: client,
+		ctx:    ctx,
+	}
+
+	lambda.Start(d.handler)
 }
