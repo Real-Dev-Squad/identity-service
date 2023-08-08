@@ -1,3 +1,4 @@
 # Ignore build folder
 .aws-sam/
 env.json
+samconfig.toml

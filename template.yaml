@@ -13,6 +13,7 @@ Globals:
       Variables:
         firestoreCred: YourFirestoreCredentials
         environment: PRODUCTION
+        baseURL: https://toz7734555.execute-api.us-east-1.amazonaws.com/Prod
 
 Resources:
   HealthCheckFunction:
@@ -83,3 +84,19 @@ Resources:
           Properties:
             Path: /call-profile
             Method: POST
+
+  CallProfilesFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: call-profiles/
+      Handler: call-profiles
+      Runtime: go1.x
+      Architectures:
+        - x86_64
+      Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
+      Events:
+        CatchAll:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /call-profiles
+            Method: GET
