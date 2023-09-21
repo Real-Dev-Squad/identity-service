@@ -17,12 +17,10 @@ Globals:
 Resources:
   HealthCheckFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Metadata:
-      BuildMethod: go1.x
     Properties:
       CodeUri: health-check/
-      Handler: bootstrap
-      Runtime: provided.al2
+      Handler: health-check
+      Runtime: go1.x
       Architectures:
         - x86_64
       Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
@@ -35,12 +33,10 @@ Resources:
 
   ProfileFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Metadata:
-      BuildMethod: go1.x
     Properties:
       CodeUri: profile/
-      Handler: bootstrap
-      Runtime: provided.al2
+      Handler: profile
+      Runtime: go1.x
       Architectures:
         - x86_64
       Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
@@ -58,12 +54,10 @@ Resources:
 
   VerifyFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Metadata:
-      BuildMethod: go1.x
     Properties:
       CodeUri: verify/
-      Handler: bootstrap
-      Runtime: provided.al2
+      Handler: verify
+      Runtime: go1.x
       Architectures:
         - x86_64
       Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
