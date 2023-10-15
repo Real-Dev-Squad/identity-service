@@ -282,7 +282,7 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
 			"userId": userId,
-			"sessionId": sessionId
+			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
 			"userId": userId,
