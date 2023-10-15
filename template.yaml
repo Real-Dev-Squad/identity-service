@@ -13,7 +13,7 @@ Globals:
       Variables:
         firestoreCred: YourFirestoreCredentials
         environment: PRODUCTION
-        baseURL: https://toz7734555.execute-api.us-east-1.amazonaws.com/Prod
+        baseURL: YourBaseAPIURL
 
 Resources:
   HealthCheckFunction:
@@ -98,5 +98,5 @@ Resources:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /call-profiles
+            Path: /profiles
             Method: GET
