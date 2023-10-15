@@ -1,4 +1,5 @@
 # Ignore build folder
 .aws-sam/
 env.json
+samconfig.toml
 */firestore-debug.log
