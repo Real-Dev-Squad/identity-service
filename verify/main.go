@@ -241,12 +241,12 @@ func verify(profileURL string, chaincode string) (string, error) {
 	responseBody := bytes.NewBuffer(postBody)
 	resp, err := http.Post(profileURL, "application/json", responseBody)
 	if err != nil {
-		log.Fatalf("An Error Occured %v", err)
+		return "", err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalln(err)
+		return "", err
 	}
 	var re res
 	json.Unmarshal([]byte(body), &re)
