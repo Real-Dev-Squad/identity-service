@@ -238,26 +238,18 @@ func verify(profileURL string, chaincode string) (string, error) {
 		"salt": salt,
 	})
 
-	reqBody := bytes.NewBuffer(postBody)
-
-	req, err := http.NewRequest("POST", profileURL, reqBody)
+	responseBody := bytes.NewBuffer(postBody)
+	resp, err := http.Post(profileURL, "application/json", responseBody)
 	if err != nil {
-		return "", err
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
+		log.Fatalf("An Error Occured %v", err)
 	}
 	defer resp.Body.Close()
-
-	r, err := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		log.Fatalln(err)
 	}
 	var re res
-	json.Unmarshal([]byte(r), &re)
+	json.Unmarshal([]byte(body), &re)
 	err = bcrypt.CompareHashAndPassword([]byte(re.Hash), []byte(chaincode))
 	if err == nil {
 		return "VERIFIED", nil
@@ -270,6 +262,8 @@ func verify(profileURL string, chaincode string) (string, error) {
 Main Handler Function
 */
 func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	
+	defer d.client.Close()
 
 	var userId string = getUserIdFromBody([]byte(request.Body))
 	if userId == "" {
@@ -299,7 +293,6 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 	}
 	logVerification(d.client, d.ctx, status, profileURL, userId)
 	setProfileStatus(d.client, d.ctx, userId, status)
-	defer d.client.Close()
 
 	return events.APIGatewayProxyResponse{
 		Body:       "Verification Process Done",
