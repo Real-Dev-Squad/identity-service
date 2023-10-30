@@ -262,9 +262,6 @@ func verify(profileURL string, chaincode string) (string, error) {
 Main Handler Function
 */
 func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	
-	defer d.client.Close()
-
 	var userId string = getUserIdFromBody([]byte(request.Body))
 	if userId == "" {
 		return events.APIGatewayProxyResponse{}, errors.New("no userId provided")

@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	// "errors"
+	"errors"
 	"fmt"
 	"log"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -50,19 +48,11 @@ func TestHandler(t *testing.T) {
 	client := newFirestoreMockClient(ctx)
 	defer cancel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/profile-two/verification" {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"hash": "$2a$12$ScGc2Q0t0rqqSJK1E2W/WuaRVAchaVWdUqb1hQi21cFTnOVvlIdry"}`))
-		}
-	}))
-	defer server.Close()
-
 	verifiedUserId := "123"
 	unverifiedUserId := "321"
 	users := []map[string]interface{}{
-		{"userId": verifiedUserId, "chaincode": "abcdefgh", "profileURL": server.URL + "/profile-one", "profileStatus": "VERIFIED"},
-		{"userId": unverifiedUserId, "chaincode": "testchaincode", "profileURL": server.URL + "/profile-two", "profileStatus": "BLOCKED"},
+		{"userId": verifiedUserId, "chaincode": "TESTCHAIN", "profileURL": "https://test-profile-service-rds.onrender.com", "profileStatus": "VERIFIED"},
+		{"userId": unverifiedUserId, "chaincode": "TESTCHAINCODE", "profileURL": "https://test-profile-service-rds.onrender.com", "profileStatus": "BLOCKED"},
 	}
 
 	if err := addUsers(ctx, client, users); err != nil {
@@ -75,24 +65,24 @@ func TestHandler(t *testing.T) {
 		expect  string
 		err     error
 	}{
-		// {
-		// 	name:    "verified user",
-		// 	request: events.APIGatewayProxyRequest{Body: fmt.Sprintf(`{ "userId": "%s" }`, verifiedUserId)},
-		// 	expect:  "Already Verified",
-		// 	err:     nil,
-		// },
-		// {
-		// 	name:    "unverified user",
-		// 	request: events.APIGatewayProxyRequest{Body: fmt.Sprintf(`{ "userId": "%s" }`, unverifiedUserId)},
-		// 	expect:  "Verification Process Done",
-		// 	err:     nil,
-		// },
-		// {
-		// 	name:    "no userId",
-		// 	request: events.APIGatewayProxyRequest{Body: `{}`},
-		// 	expect:  "",
-		// 	err:     errors.New("no userId provided"),
-		// },
+		{
+			name:    "unverified user",
+			request: events.APIGatewayProxyRequest{Body: fmt.Sprintf(`{ "userId": "%s" }`, unverifiedUserId)},
+			expect:  "Verification Process Done",
+			err:     nil,
+		},
+		{
+			name:    "verified user",
+			request: events.APIGatewayProxyRequest{Body: fmt.Sprintf(`{ "userId": "%s" }`, verifiedUserId)},
+			expect:  "Already Verified",
+			err:     nil,
+		},
+		{
+			name:    "no userId",
+			request: events.APIGatewayProxyRequest{Body: `{}`},
+			expect:  "",
+			err:     errors.New("no userId provided"),
+		},
 	}
 
 	d := deps{
