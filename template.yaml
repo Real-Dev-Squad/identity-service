@@ -8,7 +8,8 @@ Description: >
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 900
+    Timeout: 5
+    MemorySize: 128
     Environment:
       Variables:
         firestoreCred: YourFirestoreCredentials
@@ -18,29 +19,69 @@ Globals:
 Resources:
   HealthCheckFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Metadata:
+      BuildMethod: go1.x
     Properties:
       CodeUri: health-check/
-      Handler: health-check
-      Runtime: go1.x
+      Handler: bootstrap
+      Runtime: provided.al2023
       Architectures:
         - x86_64
-      Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
+      Tracing: Active
       Events:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /healthCheck
+            Path: /health
             Method: GET
 
   ProfileFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Metadata:
+      BuildMethod: go1.x
     Properties:
       CodeUri: profile/
-      Handler: profile
-      Runtime: go1.x
+      Handler: bootstrap
+      Runtime: provided.al2023
       Architectures:
         - x86_64
-      Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
+      Tracing: Active
+      Events:
+        CatchAll:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /profile
+            Method: GET
+
+  VerifyFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      CodeUri: verify/
+      Handler: bootstrap
+      Runtime: provided.al2023
+      Architectures:
+        - x86_64
+      Tracing: Active
+      Events:
+        CatchAll:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /verify
+            Method: POST
+
+  CallProfilesFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      CodeUri: call-profiles/
+      Handler: bootstrap
+      Runtime: provided.al2023
+      Architectures:
+        - x86_64
+      Tracing: Active
       Events:
         ScheduledEvent:
           Type: Schedule
@@ -50,53 +91,23 @@ Resources:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /profile
+            Path: /profiles
             Method: GET
-
-  VerifyFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Properties:
-      CodeUri: verify/
-      Handler: verify
-      Runtime: go1.x
-      Architectures:
-        - x86_64
-      Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
-      Events:
-        CatchAll:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /verify
-            Method: POST
 
   CallProfileFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Metadata:
+      BuildMethod: go1.x
     Properties:
       CodeUri: call-profile/
-      Handler: call-profile
-      Runtime: go1.x
+      Handler: bootstrap
+      Runtime: provided.al2023
       Architectures:
         - x86_64
-      Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
+      Tracing: Active
       Events:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
             Path: /call-profile
             Method: POST
-
-  CallProfilesFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Properties:
-      CodeUri: call-profiles/
-      Handler: call-profiles
-      Runtime: go1.x
-      Architectures:
-        - x86_64
-      Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
-      Events:
-        CatchAll:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /profiles
-            Method: GET
