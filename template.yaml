@@ -35,24 +35,6 @@ Resources:
             Path: /health
             Method: GET
 
-  ProfileFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Metadata:
-      BuildMethod: go1.x
-    Properties:
-      CodeUri: profile/
-      Handler: bootstrap
-      Runtime: provided.al2023
-      Architectures:
-        - x86_64
-      Tracing: Active
-      Events:
-        CatchAll:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /profile
-            Method: GET
-
   VerifyFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Metadata:
@@ -109,5 +91,5 @@ Resources:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /call-profile
+            Path: /profile
             Method: POST

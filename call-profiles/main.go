@@ -87,7 +87,7 @@ func callProfile(userId string, sessionId string) {
 	jsonBody := []byte(fmt.Sprintf(`{"userId": "%s", "sessionId": "%s"}`, userId, sessionId))
 	bodyReader := bytes.NewReader(jsonBody)
 
-	requestURL := fmt.Sprintf("%s/call-profile", os.Getenv("baseURL"))
+	requestURL := fmt.Sprintf("%s/profile", os.Getenv("baseURL"))
 	req, _ := http.NewRequest(http.MethodPost, requestURL, bodyReader)
 	_, err1 := httpClient.Do(req)
 	if err1 != nil {
