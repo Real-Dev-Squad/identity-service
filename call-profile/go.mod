@@ -1,6 +1,6 @@
 module main
 
-go 1.18
+go 1.21
 
 require (
 	cloud.google.com/go/firestore v1.10.0

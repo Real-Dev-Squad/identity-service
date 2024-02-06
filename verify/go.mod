@@ -1,6 +1,6 @@
 module verify
 
-go 1.17
+go 1.21
 
 require (
 	cloud.google.com/go/firestore v1.9.0

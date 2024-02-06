@@ -34,7 +34,7 @@ jobs:
       - uses: aws-actions/setup-sam@v1
 
       - name: Build resources
-        run: sam build --template ${SAM_TEMPLATE} --use-container --build-image public.ecr.aws/sam/build-go1.x:1.107.0-20240110194920 --debug
+        run: sam build --template ${SAM_TEMPLATE} --use-container --build-image public.ecr.aws/sam/build-go1.x:1.108.0-20240123215155 --debug
 
       - name: Assume the pipeline user role
         env:
