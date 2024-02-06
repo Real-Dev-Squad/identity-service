@@ -1,4 +1,4 @@
-cd health-check
+cd health
 go mod tidy
 go test -v
 npx kill-port 8090

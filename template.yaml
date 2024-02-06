@@ -17,6 +17,24 @@ Globals:
         baseURL: YourBaseAPIURL
 
 Resources:
+  HealthFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      CodeUri: health/
+      Handler: bootstrap
+      Runtime: provided.al2023
+      Architectures:
+        - x86_64
+      Tracing: Active
+      Events:
+        CatchAll:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /health
+            Method: GET
+
   HealthCheckFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Metadata:
@@ -29,10 +47,15 @@ Resources:
         - x86_64
       Tracing: Active
       Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: cron(55 17 ? * WED *)
+            Enabled: True
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /health
+            Path: /health-check
             Method: GET
 
   VerifyFunction:
