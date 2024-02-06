@@ -1,4 +1,6 @@
-cd health-check
+cd health
+go mod tidy
+cd ../health-check
 go mod tidy
 cd ../verify
 go mod tidy
