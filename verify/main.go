@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -20,7 +21,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"golang.org/x/crypto/bcrypt"
+	"crypto/sha512"
 )
 
 /*
@@ -232,8 +233,6 @@ func verify(profileURL string, chaincode string) (string, error) {
 	rand.Seed(time.Now().UnixNano())
 	var salt string = randSalt(21)
 
-	salt = "$2b$10$" + salt + "."
-
 	postBody, _ := json.Marshal(map[string]string{
 		"salt": salt,
 	})
@@ -250,8 +249,9 @@ func verify(profileURL string, chaincode string) (string, error) {
 	}
 	var re res
 	json.Unmarshal([]byte(body), &re)
-	err = bcrypt.CompareHashAndPassword([]byte(re.Hash), []byte(chaincode))
-	if err == nil {
+	sha_512 := sha512.New()
+	sha_512.Write([]byte(salt + chaincode))
+	if fmt.Sprintf("%x", sha_512.Sum(nil)) == re.Hash {
 		return "VERIFIED", nil
 	} else {
 		return "BLOCKED", nil

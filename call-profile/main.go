@@ -526,7 +526,10 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		userUrl = userUrl + "/"
 	}
 	var isServiceRunning bool
-	_, serviceErr := http.Get(userUrl + "health")
+	c := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	_, serviceErr := c.Get(userUrl + "health")
 	if serviceErr != nil {
 		isServiceRunning = false
 	} else {

@@ -8,7 +8,7 @@ Description: >
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 5
+    Timeout: 60
     MemorySize: 128
     Environment:
       Variables:
@@ -17,12 +17,12 @@ Globals:
         baseURL: YourBaseAPIURL
 
 Resources:
-  HealthCheckFunction:
+  HealthFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Metadata:
       BuildMethod: go1.x
     Properties:
-      CodeUri: health-check/
+      CodeUri: health/
       Handler: bootstrap
       Runtime: provided.al2023
       Architectures:
@@ -35,22 +35,27 @@ Resources:
             Path: /health
             Method: GET
 
-  ProfileFunction:
+  HealthCheckFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Metadata:
       BuildMethod: go1.x
     Properties:
-      CodeUri: profile/
+      CodeUri: health-check/
       Handler: bootstrap
       Runtime: provided.al2023
       Architectures:
         - x86_64
       Tracing: Active
       Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: cron(55 17 ? * WED *)
+            Enabled: True
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /profile
+            Path: /health-check
             Method: GET
 
   VerifyFunction:
@@ -109,5 +114,5 @@ Resources:
         CatchAll:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /call-profile
+            Path: /profile
             Method: POST
