@@ -240,12 +240,12 @@ func verify(profileURL string, chaincode string) (string, error) {
 	responseBody := bytes.NewBuffer(postBody)
 	resp, err := http.Post(profileURL, "application/json", responseBody)
 	if err != nil {
-		return "", err
+		return "BLOCKED", err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "BLOCKED", err
 	}
 	var re res
 	json.Unmarshal([]byte(body), &re)
@@ -286,6 +286,8 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 
 	status, err := verify(profileURL, chaincode)
 	if err != nil {
+		logVerification(d.client, d.ctx, status, profileURL, userId)
+		setProfileStatus(d.client, d.ctx, userId, status)
 		return events.APIGatewayProxyResponse{}, err
 	}
 	logVerification(d.client, d.ctx, status, profileURL, userId)
