@@ -162,6 +162,7 @@ func TestGetUserIdFromBody(t *testing.T) {
 type testVerifyData struct {
 	name           string
 	path           string
+	salt		   string
 	chaincode      string
 	mockStatusCode int
 	mockResBody    string
@@ -174,15 +175,17 @@ func TestVerify(t *testing.T) {
 		{
 			name:           "VERIFIED",
 			path:           "/profile-one",
+			salt:			"testSalt",
 			chaincode:      "testchaincode",
 			mockStatusCode: http.StatusOK,
-			mockResBody:    `{"hash": "$2a$12$ScGc2Q0t0rqqSJK1E2W/WuaRVAchaVWdUqb1hQi21cFTnOVvlIdry"}`,
+			mockResBody:    `{"hash": "cadf727ffff23ec46c17d808a4884ea7566765182d1a2ffa88e4719bc1f7f9fb328e2abacc13202f2dc55b9d653919b79ecf02dd752de80285bbec57a57713d9"}`,
 			expectedStatus: "VERIFIED",
 			expectedErr:    nil,
 		},
 		{
 			name:           "BLOCKED",
 			path:           "/profile-two",
+			salt:			"testSalt",
 			chaincode:      "invalid",
 			mockStatusCode: http.StatusForbidden,
 			mockResBody:    `{"hash": "abcdefghijklmnopqrstuvwxyz"}`,
@@ -194,7 +197,7 @@ func TestVerify(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/profile-one" {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"hash": "$2a$12$ScGc2Q0t0rqqSJK1E2W/WuaRVAchaVWdUqb1hQi21cFTnOVvlIdry"}`))
+			w.Write([]byte(`{"hash": "cadf727ffff23ec46c17d808a4884ea7566765182d1a2ffa88e4719bc1f7f9fb328e2abacc13202f2dc55b9d653919b79ecf02dd752de80285bbec57a57713d9"}`))
 		}
 
 		if r.URL.Path == "/profile-two" {
@@ -206,7 +209,7 @@ func TestVerify(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 
-			status, err := verify(server.URL+testCase.path, testCase.chaincode)
+			status, err := verify(server.URL+testCase.path, testCase.chaincode, testCase.salt)
 
 			assert.Equal(t, testCase.expectedStatus, status)
 			assert.Equal(t, testCase.expectedErr, err)
