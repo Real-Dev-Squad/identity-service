@@ -530,6 +530,12 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	var chaincode string
 	var discordId string
 
+	if str, ok := dsnap.Data()["discordId"].(string); ok {
+		discordId = str
+	} else {
+		discordId = ""
+	}
+
 	if str, ok := dsnap.Data()["profileURL"].(string); ok {
 		userUrl = str
 	} else {
@@ -539,12 +545,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 			Body:       "Profile Skipped No Profile URL",
 			StatusCode: 200,
 		}, nil
-	}
-
-	if str, ok := dsnap.Data()["discordId"].(string); ok {
-		discordId = str
-	} else {
-		discordId = ""
 	}
 
 	if str, ok := dsnap.Data()["chaincode"].(string); ok {
