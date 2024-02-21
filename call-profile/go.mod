@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-lambda-go v1.41.0
 	github.com/aws/aws-sdk-go v1.44.284
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
+	github.com/golang-jwt/jwt/v5 v5.2.0
 	golang.org/x/crypto v0.14.0
 	google.golang.org/api v0.128.0
 )
