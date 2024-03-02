@@ -225,13 +225,10 @@ func randSalt(n int) string {
 /*
  Function to verify the user
 */
-func verify(profileURL string, chaincode string) (string, error) {
+func verify(profileURL string, chaincode string, salt string) (string, error) {
 	type res struct {
 		Hash string `json:"hash"`
 	}
-
-	rand.Seed(time.Now().UnixNano())
-	var salt string = randSalt(21)
 
 	postBody, _ := json.Marshal(map[string]string{
 		"salt": salt,
@@ -240,12 +237,12 @@ func verify(profileURL string, chaincode string) (string, error) {
 	responseBody := bytes.NewBuffer(postBody)
 	resp, err := http.Post(profileURL, "application/json", responseBody)
 	if err != nil {
-		return "", err
+		return "BLOCKED", err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "BLOCKED", err
 	}
 	var re res
 	json.Unmarshal([]byte(body), &re)
@@ -284,8 +281,13 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 		}, nil
 	}
 
-	status, err := verify(profileURL, chaincode)
+	rand.Seed(time.Now().UnixNano())
+	var salt string = randSalt(21)
+
+	status, err := verify(profileURL, chaincode, salt)
 	if err != nil {
+		logVerification(d.client, d.ctx, status, profileURL, userId)
+		setProfileStatus(d.client, d.ctx, userId, status)
 		return events.APIGatewayProxyResponse{}, err
 	}
 	logVerification(d.client, d.ctx, status, profileURL, userId)

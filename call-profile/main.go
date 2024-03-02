@@ -10,6 +10,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"bytes"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
@@ -25,6 +26,7 @@ import (
 	// validation packages
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var wg sync.WaitGroup
@@ -85,6 +87,10 @@ type structProfilesSkipped struct {
 	UserDataTypeError                  []string
 	ValidationError                    []string
 	OtherError                         []string
+}
+
+type Claims struct {
+	jwt.RegisteredClaims
 }
 
 /*
@@ -155,6 +161,8 @@ var Constants map[string]string = map[string]string{
 	"ENV_PRODUCTION":          "PRODUCTION",
 	"STORED":                  "stored",
 	"FIRE_STORE_CRED":         "firestoreCred",
+	"DISCORD_BOT_URL":         "discordBotURL",
+	"IDENTITY_SERVICE_PRIVATE_KEY": "identityServicePrivateKey",
 	"PROFILE_SERVICE_HEALTH":  "PROFILE_SERVICE_HEALTH",
 	"PROFILE_SKIPPED":         "PROFILE_SKIPPED",
 	"PROFILE_DIFF_STORED":     "PROFILE_DIFF_STORED",
@@ -173,11 +181,11 @@ var Constants map[string]string = map[string]string{
 /*
  Setting Firestore Key for development/production
 */
-func getFirestoreKey() string {
+func getParameter(parameter string) string {
 	if os.Getenv(("environment")) == Constants["ENV_DEVELOPMENT"] {
-		return os.Getenv(Constants["FIRE_STORE_CRED"])
+		return os.Getenv(parameter)
 	} else if os.Getenv(("environment")) == Constants["ENV_PRODUCTION"] {
-		var parameterName string = Constants["FIRE_STORE_CRED"]
+		var parameterName string = parameter
 
 		sess := session.Must(session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable,
@@ -206,7 +214,7 @@ func getFirestoreKey() string {
  Function to initialize the firestore client
 */
 func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
-	sa := option.WithCredentialsJSON([]byte(getFirestoreKey()))
+	sa := option.WithCredentialsJSON([]byte(getParameter(Constants["FIRE_STORE_CRED"])))
 	app, err := firebase.NewApp(ctx, nil, sa)
 	if err != nil {
 		return nil, err
@@ -232,6 +240,29 @@ func (res Res) Validate() error {
 		validation.Field(&res.GithubId, validation.Required),
 		validation.Field(&res.LinkedIn, validation.Required),
 		validation.Field(&res.Website, is.URL))
+}
+
+/*
+Functions to generate jwt token
+*/
+
+func generateJWTToken() string {
+	signKey, errGeneratingRSAKey := jwt.ParseRSAPrivateKeyFromPEM([]byte(getParameter(Constants["IDENTITY_SERVICE_PRIVATE_KEY"])))
+	if(errGeneratingRSAKey != nil) {
+		return "";
+	}
+	expirationTime := time.Now().Add(1 * time.Minute)
+	t := jwt.New(jwt.GetSigningMethod("RS256"))
+	t.Claims =  &Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+	tokenString, err := t.SignedString(signKey)
+	if(err != nil) {
+		return "";
+	}
+	return tokenString
 }
 
 /*
@@ -294,11 +325,27 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 /*
  Function for setting the profileStatus in user object in firestore
 */
-func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string, sessionId string) {
+func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string, sessionId string, discordId string) {
 	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
 		"profileStatus": Constants["STATUS_BLOCKED"],
 		"chaincode":     "",
 	}, firestore.MergeAll)
+
+	if discordId != "" {
+		tokenString := generateJWTToken();
+		postBody, _ := json.Marshal(map[string]string{
+			"userId": discordId,
+			"reason": reason,
+		})
+	
+		responseBody := bytes.NewBuffer(postBody)
+
+		httpClient := &http.Client{}
+		req, _ := http.NewRequest("POST", os.Getenv(Constants["DISCORD_BOT_URL"]) + "/profile/blocked", responseBody)
+		req.Header.Add("Content-Type", "application/json")
+		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", tokenString))
+		httpClient.Do(req)
+	}
 
 	newLog := Log{
 		Type:      Constants["PROFILE_SERVICE_BLOCKED"],
@@ -364,13 +411,13 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
 /*
  Getting data from the user's service
 */
-func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string, userData Res, sessionId string) string {
+func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string, userData Res, sessionId string, discordId string) string {
 	var status string = ""
 	userUrl = userUrl + "profile"
 	hashedChaincode, err := bcrypt.GenerateFromPassword([]byte(chaincode), bcrypt.DefaultCost)
 	if err != nil {
 		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
 		return "chaincode not encrypted"
 	}
 
@@ -380,18 +427,18 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
 		return "error getting profile data"
 	}
 	if resp.StatusCode == 401 {
 		logProfileSkipped(client, ctx, userId, "Unauthenticated Access to Profile Data", sessionId)
-		setProfileStatusBlocked(client, ctx, userId, "Unauthenticated Access to Profile Data", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Unauthenticated Access to Profile Data", sessionId, discordId)
 		resp.Body.Close()
 		return "unauthenticated access to profile data"
 	}
 	if resp.StatusCode != 200 {
 		logProfileSkipped(client, ctx, userId, "Error in getting Profile Data", sessionId)
-		setProfileStatusBlocked(client, ctx, userId, "Error in getting Profile Data", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Error in getting Profile Data", sessionId, discordId)
 		resp.Body.Close()
 		return "error in getting profile data"
 	}
@@ -401,14 +448,14 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	r, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
 		return "error reading profile data"
 	}
 	var res Res
 	err = json.Unmarshal([]byte(r), &res)
 	if err != nil {
 		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
 		return "error converting data to json"
 	}
 
@@ -416,7 +463,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 
 	if err != nil {
 		logProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId)
+		setProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
 		return fmt.Sprintf("error in validation: ", err)
 	}
 
@@ -481,12 +528,19 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	var userUrl string
 	var chaincode string
+	var discordId string
+
+	if str, ok := dsnap.Data()["discordId"].(string); ok {
+		discordId = str
+	} else {
+		discordId = ""
+	}
 
 	if str, ok := dsnap.Data()["profileURL"].(string); ok {
 		userUrl = str
 	} else {
 		logProfileSkipped(client, ctx, userId, "Profile URL not available", sessionId)
-		setProfileStatusBlocked(client, ctx, userId, "Profile URL not available", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Profile URL not available", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No Profile URL",
 			StatusCode: 200,
@@ -496,7 +550,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	if str, ok := dsnap.Data()["chaincode"].(string); ok {
 		if str == "" {
 			logProfileSkipped(client, ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId)
-			setProfileStatusBlocked(client, ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId)
+			setProfileStatusBlocked(client, ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId, discordId)
 			return events.APIGatewayProxyResponse{
 				Body:       "Profile Skipped Profile Service Blocked",
 				StatusCode: 200,
@@ -505,7 +559,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		chaincode = str
 	} else {
 		logProfileSkipped(client, ctx, userId, "Chaincode Not Found", sessionId)
-		setProfileStatusBlocked(client, ctx, userId, "Chaincode Not Found", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Chaincode Not Found", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped Chaincode Not Found",
 			StatusCode: 200,
@@ -539,14 +593,14 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	logHealth(client, ctx, userId, isServiceRunning, sessionId)
 	if !isServiceRunning {
 		logProfileSkipped(client, ctx, userId, "Profile Service Down", sessionId)
-		setProfileStatusBlocked(client, ctx, userId, "Profile Service Down", sessionId)
+		setProfileStatusBlocked(client, ctx, userId, "Profile Service Down", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped Service Down",
 			StatusCode: 200,
 		}, nil
 	}
 
-	dataErr := getdata(client, ctx, userId, userUrl, chaincode, diffToRes(userData), sessionId)
+	dataErr := getdata(client, ctx, userId, userUrl, chaincode, diffToRes(userData), sessionId, discordId)
 	if dataErr != "" {
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped " + dataErr,
