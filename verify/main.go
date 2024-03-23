@@ -16,8 +16,9 @@ import (
 	firebase "firebase.google.com/go"
 	"google.golang.org/api/option"
 
-	"cloud.google.com/go/firestore"
 	"crypto/sha512"
+
+	"cloud.google.com/go/firestore"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -135,7 +136,7 @@ func setProfileStatus(client *firestore.Client, ctx context.Context, id string, 
 		newData = map[string]interface{}{
 			"profileStatus": status,
 			"chaincode":     "",
-			"updated_at":    time.Now().UnixNano() / int64(time.Millisecond),
+			"updated_at":    time.Now().UnixMilli(),
 		}
 	}
 

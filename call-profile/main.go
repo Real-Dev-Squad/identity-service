@@ -329,7 +329,7 @@ func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, user
 	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
 		"profileStatus": Constants["STATUS_BLOCKED"],
 		"chaincode":     "",
-		"updated_at":    time.Now().UnixNano() / int64(time.Millisecond),
+		"updated_at":    time.Now().UnixMilli(),
 	}, firestore.MergeAll)
 
 	if discordId != "" {
