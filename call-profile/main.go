@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 	"os"
 	"sync"
 	"time"
-	"bytes"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
@@ -24,7 +24,7 @@ import (
 	"google.golang.org/api/option"
 
 	// validation packages
-	"github.com/go-ozzo/ozzo-validation/v4"
+	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -32,7 +32,7 @@ import (
 var wg sync.WaitGroup
 
 /*
- Structures
+Structures
 */
 type Log struct {
 	Type      string                 `firestore:"type,omitempty"`
@@ -94,7 +94,7 @@ type Claims struct {
 }
 
 /*
-	Structures Conversions
+Structures Conversions
 */
 func diffToRes(diff Diff) Res {
 	return Res{
@@ -154,21 +154,21 @@ func diffToMap(diff Diff) map[string]interface{} {
 }
 
 /*
- Setting Constants Map
+Setting Constants Map
 */
 var Constants map[string]string = map[string]string{
-	"ENV_DEVELOPMENT":         "DEVELOPMENT",
-	"ENV_PRODUCTION":          "PRODUCTION",
-	"STORED":                  "stored",
-	"FIRE_STORE_CRED":         "firestoreCred",
-	"DISCORD_BOT_URL":         "discordBotURL",
+	"ENV_DEVELOPMENT":              "DEVELOPMENT",
+	"ENV_PRODUCTION":               "PRODUCTION",
+	"STORED":                       "stored",
+	"FIRE_STORE_CRED":              "firestoreCred",
+	"DISCORD_BOT_URL":              "discordBotURL",
 	"IDENTITY_SERVICE_PRIVATE_KEY": "identityServicePrivateKey",
-	"PROFILE_SERVICE_HEALTH":  "PROFILE_SERVICE_HEALTH",
-	"PROFILE_SKIPPED":         "PROFILE_SKIPPED",
-	"PROFILE_DIFF_STORED":     "PROFILE_DIFF_STORED",
-	"STATUS_BLOCKED":          "BLOCKED",
-	"PROFILE_SERVICE_BLOCKED": "PROFILE_SERVICE_BLOCKED",
-	"NOT_APPROVED":            "NOT APPROVED",
+	"PROFILE_SERVICE_HEALTH":       "PROFILE_SERVICE_HEALTH",
+	"PROFILE_SKIPPED":              "PROFILE_SKIPPED",
+	"PROFILE_DIFF_STORED":          "PROFILE_DIFF_STORED",
+	"STATUS_BLOCKED":               "BLOCKED",
+	"PROFILE_SERVICE_BLOCKED":      "PROFILE_SERVICE_BLOCKED",
+	"NOT_APPROVED":                 "NOT APPROVED",
 	"PROFILE_SKIPPED_DUE_TO_UNAUTHENTICATED_ACCESS_TO_PROFILE_DATA": "profileSkippedDueToUnAuthenticatedAccessToProfileData",
 	"PROFILE_SKIPPED_DUE_TO_ERROR_IN_GETTING_PROFILE_DATA":          "profileSkippedDueToErrorInGettingProfileData",
 	"SKIPPED_SAME_LAST_REJECTED_DIFF":                               "skippedSameLastRejectedDiff",
@@ -179,7 +179,7 @@ var Constants map[string]string = map[string]string{
 }
 
 /*
- Setting Firestore Key for development/production
+Setting Firestore Key for development/production
 */
 func getParameter(parameter string) string {
 	if os.Getenv(("environment")) == Constants["ENV_DEVELOPMENT"] {
@@ -211,7 +211,7 @@ func getParameter(parameter string) string {
 */
 
 /*
- Function to initialize the firestore client
+Function to initialize the firestore client
 */
 func initializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 	sa := option.WithCredentialsJSON([]byte(getParameter(Constants["FIRE_STORE_CRED"])))
@@ -248,19 +248,19 @@ Functions to generate jwt token
 
 func generateJWTToken() string {
 	signKey, errGeneratingRSAKey := jwt.ParseRSAPrivateKeyFromPEM([]byte(getParameter(Constants["IDENTITY_SERVICE_PRIVATE_KEY"])))
-	if(errGeneratingRSAKey != nil) {
-		return "";
+	if errGeneratingRSAKey != nil {
+		return ""
 	}
 	expirationTime := time.Now().Add(1 * time.Minute)
 	t := jwt.New(jwt.GetSigningMethod("RS256"))
-	t.Claims =  &Claims{
+	t.Claims = &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
 	tokenString, err := t.SignedString(signKey)
-	if(err != nil) {
-		return "";
+	if err != nil {
+		return ""
 	}
 	return tokenString
 }
@@ -270,7 +270,7 @@ func generateJWTToken() string {
 */
 
 /*
- Logs the health of the user's service
+Logs the health of the user's service
 */
 func logHealth(client *firestore.Client, ctx context.Context, userId string, isServiceRunning bool, sessionId string) {
 	newLog := Log{
@@ -289,7 +289,7 @@ func logHealth(client *firestore.Client, ctx context.Context, userId string, isS
 }
 
 /*
- Logs the status of the user's profileDiff
+Logs the status of the user's profileDiff
 */
 func logProfileSkipped(client *firestore.Client, ctx context.Context, userId string, reason string, sessionId string) {
 	newLog := Log{
@@ -312,7 +312,7 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 		Type:      Constants["PROFILE_DIFF_STORED"],
 		Timestamp: time.Now(),
 		Meta: map[string]interface{}{
-			"userId": userId,
+			"userId":    userId,
 			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
@@ -323,25 +323,26 @@ func logProfileStored(client *firestore.Client, ctx context.Context, userId stri
 }
 
 /*
- Function for setting the profileStatus in user object in firestore
+Function for setting the profileStatus in user object in firestore
 */
 func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, userId string, reason string, sessionId string, discordId string) {
 	client.Collection("users").Doc(userId).Set(ctx, map[string]interface{}{
 		"profileStatus": Constants["STATUS_BLOCKED"],
 		"chaincode":     "",
+		"updated_at":    time.Now().UnixNano() / int64(time.Millisecond),
 	}, firestore.MergeAll)
 
 	if discordId != "" {
-		tokenString := generateJWTToken();
+		tokenString := generateJWTToken()
 		postBody, _ := json.Marshal(map[string]string{
 			"userId": discordId,
 			"reason": reason,
 		})
-	
+
 		responseBody := bytes.NewBuffer(postBody)
 
 		httpClient := &http.Client{}
-		req, _ := http.NewRequest("POST", os.Getenv(Constants["DISCORD_BOT_URL"]) + "/profile/blocked", responseBody)
+		req, _ := http.NewRequest("POST", os.Getenv(Constants["DISCORD_BOT_URL"])+"/profile/blocked", responseBody)
 		req.Header.Add("Content-Type", "application/json")
 		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", tokenString))
 		httpClient.Do(req)
@@ -363,7 +364,7 @@ func setProfileStatusBlocked(client *firestore.Client, ctx context.Context, user
 }
 
 /*
- sets the user's profile diff to not approved
+sets the user's profile diff to not approved
 */
 func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId string) {
 	client.Collection("profileDiffs").Doc(lastdiffId).Set(ctx, map[string]interface{}{
@@ -372,7 +373,7 @@ func setNotApproved(client *firestore.Client, ctx context.Context, lastdiffId st
 }
 
 /*
- Get the last profile diff of the user
+Get the last profile diff of the user
 */
 func getLastDiff(client *firestore.Client, ctx context.Context, userId string, approval string) (Res, string) {
 	query := client.Collection("profileDiffs").Where("userId", "==", userId).Where("approval", "==", approval).OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
@@ -396,7 +397,7 @@ func getLastDiff(client *firestore.Client, ctx context.Context, userId string, a
 }
 
 /*
- Generate and Store Profile Diff
+Generate and Store Profile Diff
 */
 func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string, sessionId string) {
 	var diff Diff = resToDiff(res, userId)
@@ -409,7 +410,7 @@ func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res
 }
 
 /*
- Getting data from the user's service
+Getting data from the user's service
 */
 func getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string, userData Res, sessionId string, discordId string) string {
 	var status string = ""
@@ -493,7 +494,7 @@ func getdata(client *firestore.Client, ctx context.Context, userId string, userU
 }
 
 /*
- Function to extract userId from the request body
+Function to extract userId from the request body
 */
 func getDataFromBody(body []byte) (string, string) {
 	type extractedBody struct {
@@ -507,7 +508,7 @@ func getDataFromBody(body []byte) (string, string) {
 }
 
 /*
- Main Handler Function
+Main Handler Function
 */
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	ctx := context.Background()
@@ -616,7 +617,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 }
 
 /*
- Starts the lambda (Entry Point)
+Starts the lambda (Entry Point)
 */
 func main() {
 	lambda.Start(handler)
