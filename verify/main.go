@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -16,12 +16,13 @@ import (
 	firebase "firebase.google.com/go"
 	"google.golang.org/api/option"
 
+	"crypto/sha512"
+
 	"cloud.google.com/go/firestore"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"crypto/sha512"
 )
 
 /*
@@ -135,6 +136,7 @@ func setProfileStatus(client *firestore.Client, ctx context.Context, id string, 
 		newData = map[string]interface{}{
 			"profileStatus": status,
 			"chaincode":     "",
+			"updated_at":    time.Now().UnixMilli(),
 		}
 	}
 
