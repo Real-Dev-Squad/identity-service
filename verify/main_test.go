@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -21,6 +23,14 @@ func newFirestoreMockClient(ctx context.Context) *firestore.Client {
 	}
 
 	return client
+}
+
+func startMockServer(responseBody string, responseStatusCode int) *httptest.Server {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(responseStatusCode)
+		w.Write([]byte(responseBody))
+	})
+	return httptest.NewServer(handler)
 }
 
 func addUsers(ctx context.Context, client *firestore.Client, users []map[string]interface{}) error {
@@ -48,11 +58,18 @@ func TestHandler(t *testing.T) {
 	client := newFirestoreMockClient(ctx)
 	defer cancel()
 
+	// Mock servers for profile verification
+	verifiedMockServer := startMockServer(`{"hash":"correcthash"}`, http.StatusOK)
+	defer verifiedMockServer.Close()
+
+	unverifiedMockServer := startMockServer(`{"hash":"incorrecthash"}`, http.StatusOK)
+	defer unverifiedMockServer.Close()
+
 	verifiedUserId := "123"
 	unverifiedUserId := "321"
 	users := []map[string]interface{}{
-		{"userId": verifiedUserId, "chaincode": "TESTCHAIN", "profileURL": "https://test-profile-service-rds.onrender.com", "profileStatus": "VERIFIED"},
-		{"userId": unverifiedUserId, "chaincode": "TESTCHAINCODE", "profileURL": "https://test-profile-service-rds.onrender.com", "profileStatus": "BLOCKED"},
+		{"userId": verifiedUserId, "chaincode": "TESTCHAIN", "profileURL": verifiedMockServer.URL, "profileStatus": "VERIFIED"},
+		{"userId": unverifiedUserId, "chaincode": "TESTCHAINCODE", "profileURL": unverifiedMockServer.URL, "profileStatus": "BLOCKED"},
 	}
 
 	if err := addUsers(ctx, client, users); err != nil {
@@ -97,5 +114,4 @@ func TestHandler(t *testing.T) {
 			assert.Equal(t, testCase.expect, response.Body)
 		})
 	}
-
 }
