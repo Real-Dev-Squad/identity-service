@@ -9,5 +9,5 @@ go mod tidy
 cd ../call-profiles
 go mod tidy
 cd ..
-sam.cmd build
-sam.cmd local start-api --env-vars env.json
+sam build
+sam local start-api --env-vars env.json

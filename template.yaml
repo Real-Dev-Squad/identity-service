@@ -19,6 +19,16 @@ Globals:
         identityServicePrivateKey: YourIdentityServicePrivateKey
 
 Resources:
+  CommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: CommonLayer
+      Description: Common utilities layer
+      ContentUri: utils/
+      CompatibleRuntimes:
+        - go1.x
+      LicenseInfo: 'MIT'
+
   HealthFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Metadata:
@@ -111,6 +121,8 @@ Resources:
       Runtime: provided.al2023
       Architectures:
         - x86_64
+      Layers:
+        - !Ref CommonLayer
       Tracing: Active
       Events:
         CatchAll:
