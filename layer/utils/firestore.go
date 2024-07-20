@@ -202,3 +202,7 @@ func GetDataFromBody(body []byte) (string, string) {
 	json.Unmarshal(body, &e)
 	return e.UserId, e.SessionId
 }
+
+func GenerateHealthMessage() string {
+	return "Awesome, Server health is good!!!"
+}
