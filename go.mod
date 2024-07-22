@@ -1,4 +1,4 @@
-module github.com/rishirishhh/identity-service
+module github.com/Real-Dev-Squad/identity-service
 
 go 1.22.5
 

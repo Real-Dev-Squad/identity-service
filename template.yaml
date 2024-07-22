@@ -57,6 +57,8 @@ Resources:
       CodeUri: health-check/
       Handler: bootstrap
       Runtime: provided.al2023
+      Layers:
+        - !Ref UtilitiesLayer      
       Architectures:
         - x86_64
       Tracing: Active
@@ -80,6 +82,8 @@ Resources:
       CodeUri: verify/
       Handler: bootstrap
       Runtime: provided.al2023
+      Layers:
+        - !Ref UtilitiesLayer      
       Architectures:
         - x86_64
       Tracing: Active
@@ -98,6 +102,8 @@ Resources:
       CodeUri: call-profiles/
       Handler: bootstrap
       Runtime: provided.al2023
+      Layers:
+        - !Ref UtilitiesLayer      
       Architectures:
         - x86_64
       Tracing: Active
@@ -132,124 +138,3 @@ Resources:
           Properties:
             Path: /profile
             Method: POST
-
-# AWSTemplateFormatVersion: "2010-09-09"
-# Transform: AWS::Serverless-2016-10-31
-# Description: >
-#   identity-service
-
-#   Sample SAM Template for identity-service
-
-# # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
-# Globals:
-#   Function:
-#     Timeout: 60
-#     MemorySize: 128
-#     Environment:
-#       Variables:
-#         firestoreCred: YourFirestoreCredentials
-#         environment: PRODUCTION
-#         baseURL: YourBaseAPIURL
-#         discordBotURL: DiscordBotURL
-#         identityServicePrivateKey: YourIdentityServicePrivateKey
-
-# Resources:
-#   HealthFunction:
-#     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-#     Metadata:
-#       BuildMethod: go1.x
-#     Properties:
-#       CodeUri: health/
-#       Handler: bootstrap
-#       Runtime: provided.al2023
-#       Architectures:
-#         - x86_64
-#       Tracing: Active
-#       Events:
-#         CatchAll:
-#           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-#           Properties:
-#             Path: /health
-#             Method: GET
-
-#   HealthCheckFunction:
-#     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-#     Metadata:
-#       BuildMethod: go1.x
-#     Properties:
-#       CodeUri: health-check/
-#       Handler: bootstrap
-#       Runtime: provided.al2023
-#       Architectures:
-#         - x86_64
-#       Tracing: Active
-#       Events:
-#         ScheduledEvent:
-#           Type: Schedule
-#           Properties:
-#             Schedule: cron(55 17 ? * WED *)
-#             Enabled: True
-#         CatchAll:
-#           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-#           Properties:
-#             Path: /health-check
-#             Method: GET
-
-#   VerifyFunction:
-#     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-#     Metadata:
-#       BuildMethod: go1.x
-#     Properties:
-#       CodeUri: verify/
-#       Handler: bootstrap
-#       Runtime: provided.al2023
-#       Architectures:
-#         - x86_64
-#       Tracing: Active
-#       Events:
-#         CatchAll:
-#           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-#           Properties:
-#             Path: /verify
-#             Method: POST
-
-#   CallProfilesFunction:
-#     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-#     Metadata:
-#       BuildMethod: go1.x
-#     Properties:
-#       CodeUri: call-profiles/
-#       Handler: bootstrap
-#       Runtime: provided.al2023
-#       Architectures:
-#         - x86_64
-#       Tracing: Active
-#       Events:
-#         ScheduledEvent:
-#           Type: Schedule
-#           Properties:
-#             Schedule: cron(0 18 ? * WED *)
-#             Enabled: True
-#         CatchAll:
-#           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-#           Properties:
-#             Path: /profiles
-#             Method: GET
-
-#   CallProfileFunction:
-#     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-#     Metadata:
-#       BuildMethod: go1.x
-#     Properties:
-#       CodeUri: call-profile/
-#       Handler: bootstrap
-#       Runtime: provided.al2023
-#       Architectures:
-#         - x86_64
-#       Tracing: Active
-#       Events:
-#         CatchAll:
-#           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-#           Properties:
-#             Path: /profile
-#             Method: POST

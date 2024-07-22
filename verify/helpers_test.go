@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
+	utils "github.com/Real-Dev-Squad/identity-service/layer/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,7 +36,7 @@ func TestSetProfileStatus(t *testing.T) {
 	// When status is BLOCKED, expect to set chaincode to empty string
 	ID := "1234"
 	profileStatus := "BLOCKED"
-	err := setProfileStatus(client, ctx, ID, profileStatus)
+	err := utils.SetProfileStatus(client, ctx, ID, profileStatus)
 	if err != nil {
 		t.Errorf("setProfileStatus returned an error: %v", err)
 	}
@@ -51,7 +52,7 @@ func TestSetProfileStatus(t *testing.T) {
 	// if status is VERIFIED / PENDING, expect to set profile status without errors
 	ID = "abcd"
 	profileStatus = "VERIFIED"
-	err = setProfileStatus(client, ctx, ID, profileStatus)
+	err = utils.SetProfileStatus(client, ctx, ID, profileStatus)
 	if err != nil {
 		t.Errorf("setProfileStatus returned an error: %v", err)
 	}
@@ -115,7 +116,7 @@ func TestGetUserData(t *testing.T) {
 				"profileStatus": testCase.profileStatus,
 			})
 
-			profileURL, profileStatus, chaincode, err := getUserData(client, ctx, testCase.userId)
+			profileURL, profileStatus, chaincode, err := utils.GetUserData(client, ctx, testCase.userId)
 
 			assert.Equal(t, testCase.expectedErr, err)
 			if testCase.expectedErr == nil {
@@ -132,7 +133,7 @@ func TestGetUserIdFromBody(t *testing.T) {
 	body := []byte(`{"userId": "123"}`)
 	expected := "123"
 
-	actual := getUserIdFromBody(body)
+	actual := utils.GetUserIdFromBody(body)
 
 	if actual != expected {
 		t.Errorf("getUserIdFromBody returned %v, expected %v", actual, expected)
@@ -142,7 +143,7 @@ func TestGetUserIdFromBody(t *testing.T) {
 	body = []byte(``)
 	expected = ""
 
-	actual = getUserIdFromBody(body)
+	actual = utils.GetUserIdFromBody(body)
 
 	if actual != expected {
 		t.Errorf("getUserIdFromBody returned %v, expected %v", actual, expected)
@@ -152,7 +153,7 @@ func TestGetUserIdFromBody(t *testing.T) {
 	body = []byte(`{"invalidProperty": ""}`)
 	expected = ""
 
-	actual = getUserIdFromBody(body)
+	actual = utils.GetUserIdFromBody(body)
 
 	if actual != expected {
 		t.Errorf("getUserIdFromBody returned %v, expected %v", actual, expected)
@@ -162,7 +163,7 @@ func TestGetUserIdFromBody(t *testing.T) {
 type testVerifyData struct {
 	name           string
 	path           string
-	salt		   string
+	salt           string
 	chaincode      string
 	mockStatusCode int
 	mockResBody    string
@@ -175,7 +176,7 @@ func TestVerify(t *testing.T) {
 		{
 			name:           "VERIFIED",
 			path:           "/profile-one",
-			salt:			"testSalt",
+			salt:           "testSalt",
 			chaincode:      "testchaincode",
 			mockStatusCode: http.StatusOK,
 			mockResBody:    `{"hash": "cadf727ffff23ec46c17d808a4884ea7566765182d1a2ffa88e4719bc1f7f9fb328e2abacc13202f2dc55b9d653919b79ecf02dd752de80285bbec57a57713d9"}`,
@@ -185,7 +186,7 @@ func TestVerify(t *testing.T) {
 		{
 			name:           "BLOCKED",
 			path:           "/profile-two",
-			salt:			"testSalt",
+			salt:           "testSalt",
 			chaincode:      "invalid",
 			mockStatusCode: http.StatusForbidden,
 			mockResBody:    `{"hash": "abcdefghijklmnopqrstuvwxyz"}`,

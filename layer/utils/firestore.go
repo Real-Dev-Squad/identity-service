@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -205,4 +206,91 @@ func GetDataFromBody(body []byte) (string, string) {
 
 func GenerateHealthMessage() string {
 	return "Awesome, Server health is good!!!"
+}
+
+/*
+Function to extract userId from the request body
+*/
+
+func GetUserIdFromBody(body []byte) string {
+	type extractedBody struct {
+		UserId string `json:"userId"`
+	}
+
+	var e extractedBody
+	json.Unmarshal(body, &e)
+	return e.UserId
+}
+
+/*
+Function to get the userData using userId
+*/
+
+func GetUserData(client *firestore.Client, ctx context.Context, userId string) (string, string, string, error) {
+	dsnap, err := client.Collection("users").Doc(userId).Get(ctx)
+	var profileURL string
+	var profileStatus string
+	var chaincode string
+	if err != nil {
+		return "", "", "", err
+	}
+	if str, ok := dsnap.Data()["profileURL"].(string); ok {
+		profileURL = str
+	} else {
+		return "", "", "", errors.New("profile url is not a string")
+	}
+	if str, ok := dsnap.Data()["profileStatus"].(string); ok {
+		profileStatus = str
+	} else {
+		profileStatus = ""
+	}
+
+	if str, ok := dsnap.Data()["chaincode"].(string); ok {
+		if str != "" {
+			chaincode = str
+		} else {
+			newLog := Log{
+				Type:      "VERIFICATION_BLOCKED",
+				Timestamp: time.Now(),
+				Meta: map[string]interface{}{
+					"userId": userId,
+				},
+				Body: map[string]interface{}{
+					"userId": userId,
+					"reason": "Chaincode is empty. Generate new one.",
+				},
+			}
+			client.Collection("logs").Add(ctx, newLog)
+			return "", "", "", errors.New("chaincode is blocked")
+		}
+	} else {
+		return "", "", "", errors.New("chaincode is not a string")
+	}
+
+	return profileURL, profileStatus, chaincode, nil
+}
+
+/*
+Function for setting the profileStatus in user object in firestore
+*/
+func SetProfileStatus(client *firestore.Client, ctx context.Context, id string, status string) error {
+	var newData = map[string]interface{}{
+		"profileStatus": status,
+	}
+
+	if status == "BLOCKED" {
+		newData = map[string]interface{}{
+			"profileStatus": status,
+			"chaincode":     "",
+			"updated_at":    time.Now().UnixMilli(),
+		}
+	}
+
+	_, err := client.Collection("users").Doc(id).Set(ctx, newData, firestore.MergeAll)
+
+	if err != nil {
+		return errors.New("unable to set profile status")
+	}
+
+	return nil
 }

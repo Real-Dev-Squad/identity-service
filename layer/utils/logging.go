@@ -57,3 +57,30 @@ func LogHealth(client *firestore.Client, ctx context.Context, userId string, isS
 
 	client.Collection("logs").Add(ctx, newLog)
 }
+
+func LogVerification(client *firestore.Client, ctx context.Context, status string, profileURL string, userId string) {
+	var logtype string
+	var logbody map[string]interface{}
+	if status == "VERIFIED" {
+		logtype = "PROFILE_VERIFIED"
+		logbody = map[string]interface{}{
+			"userId":     userId,
+			"profileURL": profileURL,
+		}
+	} else if status == "BLOCKED" {
+		logtype = "PROFILE_BLOCKED"
+		logbody = map[string]interface{}{
+			"userId": userId,
+			"reason": "Chaincode not linked. Hash sent by service is not verified.",
+		}
+	}
+	newLog := Log{
+		Type:      logtype,
+		Timestamp: time.Now(),
+		Meta: map[string]interface{}{
+			"userId": userId,
+		},
+		Body: logbody,
+	}
+	client.Collection("logs").Add(ctx, newLog)
+}

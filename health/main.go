@@ -1,9 +1,9 @@
 package main
 
 import (
+	utils "github.com/Real-Dev-Squad/identity-service/layer/utils"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/rishirishhh/identity-service/layer/utils"
 )
 
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
