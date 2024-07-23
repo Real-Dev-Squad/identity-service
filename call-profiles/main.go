@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Real-Dev-Squad/identity-service/layer/utils"
+	utils "github.com/Real-Dev-Squad/identity-service/layer/utils"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 
