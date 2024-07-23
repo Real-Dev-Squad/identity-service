@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"identity-service/layer/utils"
 	"log"
 	"net/http"
 	"os"
 	"sync"
 	"time"
 
-	utils "github.com/Real-Dev-Squad/identity-service/layer/utils"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 

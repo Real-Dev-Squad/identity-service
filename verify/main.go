@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"identity-service/layer/utils"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 	"crypto/sha512"
 
 	"cloud.google.com/go/firestore"
-	utils "github.com/Real-Dev-Squad/identity-service/layer/utils"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 )

@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"identity-service/layer/utils"
 	"net/http"
 	"time"
 
-	utils "github.com/Real-Dev-Squad/identity-service/layer/utils"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 )

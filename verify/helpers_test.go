@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"identity-service/layer/utils"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
-	utils "github.com/Real-Dev-Squad/identity-service/layer/utils"
 	"github.com/stretchr/testify/assert"
 )
 
