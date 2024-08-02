@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -146,7 +146,7 @@ func Getdata(client *firestore.Client, ctx context.Context, userId string, userU
 
 	defer resp.Body.Close()
 
-	r, err := ioutil.ReadAll(resp.Body)
+	r, err := io.ReadAll(resp.Body)
 	if err != nil {
 		LogProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
 		SetProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)

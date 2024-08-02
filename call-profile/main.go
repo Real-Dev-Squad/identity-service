@@ -14,7 +14,6 @@ import (
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	ctx := context.Background()
 	client, err := utils.InitializeFirestoreClient(ctx)
-	fmt.Println(client, err)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
