@@ -19,6 +19,16 @@ Globals:
         identityServicePrivateKey: YourIdentityServicePrivateKey
 
 Resources:
+
+  UtilitiesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: utilities
+      Description: Utility functions for identity service
+      ContentUri: layer/
+      CompatibleRuntimes:
+        - go1.x
+
   HealthFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Metadata:
@@ -27,6 +37,8 @@ Resources:
       CodeUri: health/
       Handler: bootstrap
       Runtime: provided.al2023
+      Layers:
+        - !Ref UtilitiesLayer
       Architectures:
         - x86_64
       Tracing: Active
@@ -45,6 +57,8 @@ Resources:
       CodeUri: health-check/
       Handler: bootstrap
       Runtime: provided.al2023
+      Layers:
+        - !Ref UtilitiesLayer      
       Architectures:
         - x86_64
       Tracing: Active
@@ -68,6 +82,8 @@ Resources:
       CodeUri: verify/
       Handler: bootstrap
       Runtime: provided.al2023
+      Layers:
+        - !Ref UtilitiesLayer      
       Architectures:
         - x86_64
       Tracing: Active
@@ -86,6 +102,8 @@ Resources:
       CodeUri: call-profiles/
       Handler: bootstrap
       Runtime: provided.al2023
+      Layers:
+        - !Ref UtilitiesLayer      
       Architectures:
         - x86_64
       Tracing: Active
@@ -109,6 +127,8 @@ Resources:
       CodeUri: call-profile/
       Handler: bootstrap
       Runtime: provided.al2023
+      Layers:
+        - !Ref UtilitiesLayer      
       Architectures:
         - x86_64
       Tracing: Active
