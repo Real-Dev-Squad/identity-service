@@ -1,3 +1,3 @@
 go mod tidy
-sam build
-sam local start-api --env-vars env.json
+sam.cmd build
+sam.cmd local start-api --env-vars env.json

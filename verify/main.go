@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"identity-service/layer/utils"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"time"
@@ -27,18 +27,6 @@ Structures
 type deps struct {
 	client *firestore.Client
 	ctx    context.Context
-}
-
-/*
-Function to generate random string
-*/
-func randSalt(n int) string {
-	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
 }
 
 /*
@@ -62,7 +50,7 @@ func verify(profileURL string, chaincode string, salt string) (string, error) {
 		return "BLOCKED", err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "BLOCKED", err
 	}
@@ -99,12 +87,20 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 
 	if profileStatus == "VERIFIED" {
 		return events.APIGatewayProxyResponse{
-			Body: "Already Verified",
+			Body:       "Already Verified",
+			StatusCode: 409,
 		}, nil
 	}
 
-	rand.Seed(time.Now().UnixNano())
-	var salt string = randSalt(21)
+	source := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(source)
+
+	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
+	b := make([]rune, 21)
+	for i := range b {
+		b[i] = letters[rng.Intn(len(letters))]
+	}
+	var salt string = string(b)
 
 	status, err := verify(profileURL, chaincode, salt)
 	if err != nil {

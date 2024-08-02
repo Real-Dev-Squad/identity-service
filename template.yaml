@@ -23,7 +23,7 @@ Resources:
   UtilitiesLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: UtilitiesLayer
+      LayerName: utilities
       Description: Utility functions for identity service
       ContentUri: layer/
       CompatibleRuntimes:
