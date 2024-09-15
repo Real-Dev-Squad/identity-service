@@ -18,6 +18,7 @@ func logProfileStored(client *firestore.Client, ctx context.Context, diff Diff, 
 			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
+			"userId":  userId,
 			"profile": diffToMap(diff),
 		},
 	}
@@ -51,6 +52,7 @@ func LogHealth(client *firestore.Client, ctx context.Context, userId string, isS
 			"sessionId": sessionId,
 		},
 		Body: map[string]interface{}{
+			"userId":    	  userId,
 			"serviceRunning": isServiceRunning,
 		},
 	}
