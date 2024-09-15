@@ -60,7 +60,7 @@ func getLastDiff(client *firestore.Client, ctx context.Context, userId string, a
 
 func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string, sessionId string) error {
 	newDiff := resToDiff(res, userId)
-	_, err := client.Collection("users").Doc(userId).Collection("diffs").Doc("diff_"+userId).Set(ctx, newDiff)
+	_, _, err := client.Collection("profileDiffs").Add(ctx, diffToMap(newDiff))
 	if err != nil {
 		return err
 	}

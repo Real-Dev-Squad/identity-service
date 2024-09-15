@@ -11,6 +11,7 @@ import (
 
 func resToDiff(res Res, userId string) Diff {
 	return Diff{
+		Approval: 	 "PENDING",
 		UserId:      userId,
 		Timestamp:   time.Now(),
 		FirstName:   res.FirstName,

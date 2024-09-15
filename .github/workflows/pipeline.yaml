@@ -63,7 +63,7 @@ jobs:
             --image-repository ${IMAGE_REPOSITORY} \
             --region ${REGION} \
             --output-template-file packaged.yaml
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: packaged.yaml
           path: packaged.yaml
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v2
       - uses: aws-actions/setup-sam@v1
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         with:
           name: packaged.yaml
 
