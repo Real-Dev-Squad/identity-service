@@ -3,3 +3,5 @@
 env.json
 samconfig.toml
 */firestore-debug.log
+scripts/local-dev.sh
+scripts/deploy-local.sh
