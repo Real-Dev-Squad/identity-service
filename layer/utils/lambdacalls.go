@@ -24,7 +24,6 @@ func InvokeProfileLambda(payload ProfileLambdaCallPayload) error {
 	}
 
 	functionName := "CallProfileFunction"
-	fmt.Println("functionName", functionName)
 	if functionName == "" {
 		return fmt.Errorf("PROFILE_LAMBDA_FUNCTION_ARN is not set")
 	}
@@ -36,7 +35,6 @@ func InvokeProfileLambda(payload ProfileLambdaCallPayload) error {
 
 	_, err = client.Invoke(input)
 	if err != nil {
-		fmt.Println("error invoking lambda", err)
 		return fmt.Errorf("error invoking lambda: %w", err)
 	}
 
