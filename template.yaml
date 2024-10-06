@@ -17,6 +17,7 @@ Globals:
         baseURL: YourBaseAPIURL
         discordBotURL: DiscordBotURL
         identityServicePrivateKey: YourIdentityServicePrivateKey
+        PROFILE_FUNCTION_LAMBDA_NAME: CallProfileFunction
 
 Resources:
   UtilitiesLayer:

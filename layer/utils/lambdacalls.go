@@ -3,15 +3,22 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/lambda"
 )
 
+// ProfileLambdaCallPayload represents the payload to send to the CallProfileFunction
 type ProfileLambdaCallPayload struct {
 	UserId    string `json:"userId"`
 	SessionID string `json:"sessionId"`
+}
+
+// APIGatewayProxyRequestWrapper wraps the ProfileLambdaCallPayload inside the Body field
+type APIGatewayProxyRequestWrapper struct {
+	Body string `json:"body"`
 }
 
 func InvokeProfileLambda(payload ProfileLambdaCallPayload) error {
@@ -23,14 +30,25 @@ func InvokeProfileLambda(payload ProfileLambdaCallPayload) error {
 		return fmt.Errorf("error marshalling payload: %w", err)
 	}
 
-	functionName := "CallProfileFunction"
+	// wrap the payload inside the body field
+	wrapper := APIGatewayProxyRequestWrapper{
+		Body: string(payloadBytes),
+	}
+
+	// marshal the wrapper back to json
+	wrapperBytes, err := json.Marshal(wrapper)
+	if err != nil {
+		return fmt.Errorf("error marshalling wrapper: %w", err)
+	}
+
+	functionName := os.Getenv("PROFILE_FUNCTION_LAMBDA_NAME")
 	if functionName == "" {
 		return fmt.Errorf("PROFILE_LAMBDA_FUNCTION_ARN is not set")
 	}
 
 	input := &lambda.InvokeInput{
 		FunctionName: aws.String(functionName),
-		Payload:      payloadBytes,
+		Payload:      wrapperBytes,
 	}
 
 	_, err = client.Invoke(input)
