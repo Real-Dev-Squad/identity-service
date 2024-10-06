@@ -41,9 +41,9 @@ func InvokeProfileLambda(payload ProfileLambdaCallPayload) error {
 		return fmt.Errorf("error marshalling wrapper: %w", err)
 	}
 
-	functionName := os.Getenv("PROFILE_FUNCTION_LAMBDA_NAME")
+	functionName := os.Getenv("profileFunctionLambdaName")
 	if functionName == "" {
-		return fmt.Errorf("PROFILE_LAMBDA_FUNCTION_ARN is not set")
+		return fmt.Errorf("profileFunctionLambdaName is not set")
 	}
 
 	input := &lambda.InvokeInput{
