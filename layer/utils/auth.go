@@ -47,7 +47,7 @@ func getParameter(parameter string) string {
 			Name: &parameterName,
 		})
 		if err != nil {
-			log.Fatalf(err.Error())
+			log.Print(err.Error())
 		}
 
 		return *results.Parameter.Value
