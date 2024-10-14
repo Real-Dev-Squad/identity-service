@@ -124,7 +124,7 @@ Resources:
     Metadata:
       BuildMethod: go1.x
     Properties:
-      FunctionName: CallProfileFunction
+      FunctionName: identity-service-CallProfileFunction
       CodeUri: call-profile/
       Handler: bootstrap
       Runtime: provided.al2023
