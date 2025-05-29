@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   identity-service
@@ -17,9 +17,9 @@ Globals:
         baseURL: YourBaseAPIURL
         discordBotURL: DiscordBotURL
         identityServicePrivateKey: YourIdentityServicePrivateKey
+        profileFunctionLambdaName: identity-service-CallProfileFunction
 
 Resources:
-
   UtilitiesLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -58,7 +58,7 @@ Resources:
       Handler: bootstrap
       Runtime: provided.al2023
       Layers:
-        - !Ref UtilitiesLayer      
+        - !Ref UtilitiesLayer
       Architectures:
         - x86_64
       Tracing: Active
@@ -83,7 +83,7 @@ Resources:
       Handler: bootstrap
       Runtime: provided.al2023
       Layers:
-        - !Ref UtilitiesLayer      
+        - !Ref UtilitiesLayer
       Architectures:
         - x86_64
       Tracing: Active
@@ -103,7 +103,7 @@ Resources:
       Handler: bootstrap
       Runtime: provided.al2023
       Layers:
-        - !Ref UtilitiesLayer      
+        - !Ref UtilitiesLayer
       Architectures:
         - x86_64
       Tracing: Active
@@ -124,11 +124,12 @@ Resources:
     Metadata:
       BuildMethod: go1.x
     Properties:
+      FunctionName: identity-service-CallProfileFunction
       CodeUri: call-profile/
       Handler: bootstrap
       Runtime: provided.al2023
       Layers:
-        - !Ref UtilitiesLayer      
+        - !Ref UtilitiesLayer
       Architectures:
         - x86_64
       Tracing: Active

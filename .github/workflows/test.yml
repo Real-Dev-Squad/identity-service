@@ -11,9 +11,9 @@ on:
 
 jobs:
   run_tests:
-      runs-on: ubuntu-20.04
-      steps:
-      - uses: actions/checkout@v2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Run script file
         run: |
           chmod +x ./scripts/test.sh

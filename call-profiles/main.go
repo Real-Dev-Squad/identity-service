@@ -1,13 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"identity-service/layer/utils"
 	"log"
-	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -20,18 +17,16 @@ import (
 var wg sync.WaitGroup
 
 func callProfile(userId string, sessionId string) {
-
 	defer wg.Done()
 
-	httpClient := &http.Client{}
-	jsonBody := []byte(fmt.Sprintf(`{"userId": "%s", "sessionId": "%s"}`, userId, sessionId))
-	bodyReader := bytes.NewReader(jsonBody)
+	payload := utils.ProfileLambdaCallPayload{
+		UserId:    userId,
+		SessionID: sessionId,
+	}
 
-	requestURL := fmt.Sprintf("%s/profile", os.Getenv("baseURL"))
-	req, _ := http.NewRequest(http.MethodPost, requestURL, bodyReader)
-	_, err1 := httpClient.Do(req)
-	if err1 != nil {
-		fmt.Println("error getting profile data", err1)
+	err := utils.InvokeProfileLambda(payload)
+	if err != nil {
+		log.Println("error calling profile lambda", err)
 	}
 }
 
