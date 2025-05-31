@@ -30,13 +30,15 @@ You should have some things pre-installed :
 git clone https://github.com/Real-Dev-Squad/identity-service.git
 ```
 
-# Setting Up Environment for Local Server
+# Setting Up the Environment for Your Local Server
 
-## 1. Firestore Setup
+## Firestore Setup
+
 1. Create an application on [Firebase Firestore](https://firebase.google.com/docs/firestore)
 2. [Generate a service account key file](https://cloud.google.com/iam/docs/creating-managing-service-account-keys)
 
-## 2. Environment Configuration
+## Environment Configuration
+
 1. Create an `env.json` file by copying the `sample-env.json` template
 2. Add your Firestore service credentials to the file
 
@@ -67,12 +69,13 @@ It should be added to `env.json` as:
 ```
 
 ## 3. Running the Server
+
 After completing the above steps, you can now run the server locally with your configured environment.
 
-##### *Executing the script to run the server locally*
+### Executing the script to run the server locally
 
-- Windows users need to download & install [Git bash](https://gitforwindows.org/) to execute the scirpt.
-- Mac/Linux users can run the script in your native terminal.
+- Windows users need to download & install [Git bash](https://gitforwindows.org/) to execute the script.
+- Mac/Linux users can run the script in their native terminal.
 
 ```
 sh scripts/dev.sh
