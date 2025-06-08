@@ -1,9 +1,12 @@
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+case "$OSTYPE" in
+  msys*|cygwin*|win32*)
     SAM_CMD="sam.cmd"
-else
+    ;;
+  *)
     SAM_CMD="sam"
-fi
+    ;;
+esac
 
 go mod tidy
-$SAM_CMD build
-$SAM_CMD local start-api --env-vars env.json
+"$SAM_CMD" build
+"$SAM_CMD" local start-api --env-vars env.json
