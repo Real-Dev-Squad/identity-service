@@ -30,20 +30,52 @@ You should have some things pre-installed :
 git clone https://github.com/Real-Dev-Squad/identity-service.git
 ```
 
-## Run
-### *How to add the service file credentials in the sample-env.json*
-- Remove all the spaces such that the whole _json_ that you copied is in a single line
-- Replace **\n** with **\\\\n** in your copied json
-- Replace **"** with **\\"** in your copied json
-### *Firestore setup before running the server locally*
-- Create an application on [FireStore](https://firebase.google.com/docs/firestore) and [generate a service file](https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
-- Add the service file credentials in the sample-env.json file as a string.
-- Rename `sample-env.json` to `env.json`
+# Setting Up the Environment for Your Local Server
 
-### *Executing the script to run the server locally*
+## Firestore Setup
 
-- Windows users need to download & install [Git bash](https://gitforwindows.org/) to execute the scirpt.
-- Mac/Linux users can run the script in your native terminal.
+1. Create an application on [Firebase Firestore](https://firebase.google.com/docs/firestore)
+2. [Generate a service account key file](https://cloud.google.com/iam/docs/creating-managing-service-account-keys)
+
+## Environment Configuration
+
+1. Create an `env.json` file by copying the `sample-env.json` template
+2. Add your Firestore service credentials to the file
+
+### Formatting Service Credentials
+When adding the service account JSON to your `env.json` file:
+- Convert the entire JSON to a single line string
+- Escape special characters:
+  - Replace all newlines (`\n`) with escaped newlines (`\\n`)
+  - Replace all double quotes (`"`) with escaped double quotes (`\"`)
+
+### Example
+If your service account JSON looks like this:
+```json
+{
+  "type": "service_account",
+  "project_id": "your-project-id",
+  "private_key_id": "key-id",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nkey-content\n-----END PRIVATE KEY-----\n",
+  "client_email": "email@example.com"
+}
+```
+
+It should be added to `env.json` as:
+```json
+{
+  "FIRESTORE_CREDENTIALS": "{\"type\":\"service_account\",\"project_id\":\"your-project-id\",\"private_key_id\":\"key-id\",\"private_key\":\"-----BEGIN PRIVATE KEY-----\\nkey-content\\n-----END PRIVATE KEY-----\\n\",\"client_email\":\"email@example.com\"}"
+}
+```
+
+## 3. Running the Server
+
+After completing the above steps, you can now run the server locally with your configured environment.
+
+### Executing the script to run the server locally
+
+- Windows users need to download & install [Git bash](https://gitforwindows.org/) to execute the script.
+- Mac/Linux users can run the script in their native terminal.
 
 ```
 sh scripts/dev.sh
