@@ -45,23 +45,27 @@ func TestHandler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			response, err := handler(test.request)
 			
 			if test.expectError {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), "project id is required")
+				assert.Equal(t, "", response.Body)
 			} else {
 				assert.NoError(t, err)
 			}
+			
 			assert.IsType(t, events.APIGatewayProxyResponse{}, response)
 		})
 	}
 }
 
-func TestHandlerWithMockFirestore(t *testing.T) {
+func TestHandler_NoFirestore(t *testing.T) {
 	request := events.APIGatewayProxyRequest{
 		Body: `{"userId": "mock-user-id"}`,
 	}
+	
 	_, err := handler(request)
 	
 	assert.Error(t, err)

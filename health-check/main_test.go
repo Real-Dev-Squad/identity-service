@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -11,7 +12,6 @@ func TestHandler(t *testing.T) {
 	tests := []struct {
 		name        string
 		request     events.APIGatewayProxyRequest
-		expectCode  int
 		expectError bool
 	}{
 		{
@@ -20,8 +20,7 @@ func TestHandler(t *testing.T) {
 				HTTPMethod: "GET",
 				Path:       "/health-check",
 			},
-			expectCode:  200,
-			expectError: false,
+			expectError: true,
 		},
 		{
 			name: "POST request - should still work",
@@ -29,22 +28,24 @@ func TestHandler(t *testing.T) {
 				HTTPMethod: "POST",
 				Path:       "/health-check",
 			},
-			expectCode:  200,
-			expectError: false,
+			expectError: true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			response, err := handler(test.request)
 			
-			// We expect an error here because Firestore isn't initialized in test environment
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "project id is required")
+			if test.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "project id is required")
+				assert.Equal(t, "", response.Body)
+			} else {
+				assert.NoError(t, err)
+			}
 			
-			// Response should be empty due to error
 			assert.IsType(t, events.APIGatewayProxyResponse{}, response)
-			assert.Empty(t, response.Body)
 		})
 	}
 }
@@ -70,12 +71,13 @@ func TestCallProfileHealth(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			assert.NotPanics(t, func() {
 				url := test.userUrl
-				if url[len(url)-1] != '/' {
-					url = url + "/"
+				if !strings.HasSuffix(url, "/") {
+					url += "/"
 				}
-				assert.True(t, url[len(url)-1] == '/')
+				assert.True(t, strings.HasSuffix(url, "/"))
 			})
 		})
 	}
@@ -113,9 +115,10 @@ func TestURLFormatting(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			userUrl := test.input
-			if userUrl[len(userUrl)-1] != '/' {
-				userUrl = userUrl + "/"
+			if !strings.HasSuffix(userUrl, "/") {
+				userUrl += "/"
 			}
 			result := userUrl + "health"
 			assert.Equal(t, test.expected, result)
