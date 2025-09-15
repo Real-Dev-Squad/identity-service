@@ -34,7 +34,7 @@ all_modules=("${modules[@]}" "verify")
 for module in "${all_modules[@]}"; do
     if [ -f "$TEMP_DIR/$module.out" ]; then
         echo "================================"
-        echo "${module^} module coverage:"
+        echo "$(echo ${module:0:1} | tr '[:lower:]' '[:upper:]')${module:1} module coverage:"
         go tool cover -func="$TEMP_DIR/$module.out"
     fi
 done
