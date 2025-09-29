@@ -1,40 +1,22 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"identity-service/layer/utils"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/stretchr/testify/assert"
+	"cloud.google.com/go/firestore"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
-
-func TestHandler(t *testing.T) {
-	for _, test := range TestRequests {
-		t.Run(test.Name, func(t *testing.T) {
-			t.Parallel()
-			response, err := handler(test.Request)
-			
-			if test.ExpectedErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "project id is required")
-				assert.Equal(t, "", response.Body)
-			} else {
-				assert.NoError(t, err)
-			}
-			
-			assert.IsType(t, events.APIGatewayProxyResponse{}, response)
-		})
-	}
-}
-
-func TestHandler_NoFirestore(t *testing.T) {
-	request := events.APIGatewayProxyRequest{
-		Body: `{"userId": "mock-user-id"}`,
-	}
-	
-	_, err := handler(request)
-	assert.Error(t, err)
-}
 
 func TestGetDataFromBody(t *testing.T) {
 	for _, test := range GetDataFromBodyTests {
@@ -298,4 +280,364 @@ func TestResponseStructure(t *testing.T) {
 			assert.IsType(t, events.APIGatewayProxyResponse{}, response)
 		})
 	}
+}
+
+func TestHandlerIntegration(t *testing.T) {
+	os.Setenv("environment", "test")
+	
+	ctx := context.Background()
+	client := newFirestoreMockClient(ctx)
+	defer client.Close()
+
+	testCases := []struct {
+		name           string
+		request        events.APIGatewayProxyRequest
+		userData       map[string]interface{}
+		mockServer     func() *httptest.Server
+		expectedBody   string
+		expectedStatus int
+		expectedError  bool
+	}{
+		{
+			name: "successful profile save",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"userId": "test-user-1", "sessionId": "session-1"}`,
+			},
+			userData: map[string]interface{}{
+				"userId":        "test-user-1",
+				"profileURL":    "http://example.com",
+				"chaincode":     "TESTCHAIN",
+				"discordId":     "discord123",
+				"profileStatus": "PENDING",
+				"firstName":     "John",
+				"lastName":      "Doe",
+				"email":         "john@example.com",
+				"phone":         "1234567890",
+				"yoe":           5,
+				"company":       "Tech Corp",
+				"designation":   "Developer",
+				"githubId":      "johndoe",
+				"linkedin":      "johndoe",
+				"website":       "https://johndoe.com",
+			},
+			mockServer: func() *httptest.Server {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/health" {
+						w.WriteHeader(http.StatusOK)
+						w.Write([]byte("OK"))
+					} else {
+						w.WriteHeader(http.StatusOK)
+						w.Write([]byte(`{
+							"first_name": "John",
+							"last_name": "Doe",
+							"email": "john@example.com",
+							"phone": "1234567890",
+							"yoe": 5,
+							"company": "Tech Corp",
+							"designation": "Developer",
+							"github_id": "johndoe",
+							"linkedin_id": "johndoe",
+							"website": "https://johndoe.com"
+						}`))
+					}
+				}))
+			},
+			expectedBody:   "Profile Saved",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+		{
+			name: "no user ID",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"sessionId": "session-1"}`,
+			},
+			userData:       nil,
+			mockServer:     nil,
+			expectedBody:   "Profile Skipped No UserID",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+		{
+			name: "user not found",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"userId": "non-existent-user", "sessionId": "session-1"}`,
+			},
+			userData:       nil,
+			mockServer:     nil,
+			expectedBody:   "Profile Skipped No Profile URL",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+		{
+			name: "no profile URL",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"userId": "test-user-2", "sessionId": "session-1"}`,
+			},
+			userData: map[string]interface{}{
+				"userId":        "test-user-2",
+				"chaincode":     "TESTCHAIN",
+				"discordId":     "discord123",
+				"profileStatus": "PENDING",
+			},
+			mockServer:     nil,
+			expectedBody:   "Profile Skipped No Profile URL",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+		{
+			name: "empty chaincode",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"userId": "test-user-3", "sessionId": "session-1"}`,
+			},
+			userData: map[string]interface{}{
+				"userId":        "test-user-3",
+				"profileURL":    "http://example.com",
+				"chaincode":     "",
+				"discordId":     "discord123",
+				"profileStatus": "PENDING",
+			},
+			mockServer:     nil,
+			expectedBody:   "Profile Skipped Profile Service Blocked",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+		{
+			name: "no chaincode",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"userId": "test-user-4", "sessionId": "session-1"}`,
+			},
+			userData: map[string]interface{}{
+				"userId":        "test-user-4",
+				"profileURL":    "http://example.com",
+				"discordId":     "discord123",
+				"profileStatus": "PENDING",
+			},
+			mockServer:     nil,
+			expectedBody:   "Profile Skipped Chaincode Not Found",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+		{
+			name: "service down",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"userId": "test-user-5", "sessionId": "session-1"}`,
+			},
+			userData: map[string]interface{}{
+				"userId":        "test-user-5",
+				"profileURL":    "http://example.com",
+				"chaincode":     "TESTCHAIN",
+				"discordId":     "discord123",
+				"profileStatus": "PENDING",
+			},
+			mockServer: func() *httptest.Server {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Service Unavailable"))
+				}))
+			},
+			expectedBody:   "Profile Skipped error in getting profile data",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+		{
+			name: "service timeout",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"userId": "test-user-6", "sessionId": "session-1"}`,
+			},
+			userData: map[string]interface{}{
+				"userId":        "test-user-6",
+				"profileURL":    "http://example.com",
+				"chaincode":     "TESTCHAIN",
+				"discordId":     "discord123",
+				"profileStatus": "PENDING",
+			},
+			mockServer: func() *httptest.Server {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					time.Sleep(6 * time.Second) // Longer than 5 second timeout
+					w.WriteHeader(http.StatusOK)
+				}))
+			},
+			expectedBody:   "Profile Skipped Service Down",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if testCase.userData != nil {
+				_, err := client.Collection("users").Doc(testCase.userData["userId"].(string)).Set(ctx, testCase.userData)
+				assert.NoError(t, err)
+			}
+
+			var server *httptest.Server
+			if testCase.mockServer != nil {
+				server = testCase.mockServer()
+				defer server.Close()
+				
+				if testCase.userData != nil {
+					userId := testCase.userData["userId"].(string)
+					_, err := client.Collection("users").Doc(userId).Update(ctx, []firestore.Update{
+						{Path: "profileURL", Value: server.URL},
+					})
+					assert.NoError(t, err)
+				}
+			}
+
+			response, err := handlerWithClient(testCase.request, client)
+
+			if testCase.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, testCase.expectedBody, response.Body)
+			assert.Equal(t, testCase.expectedStatus, response.StatusCode)
+		})
+	}
+}
+
+func TestHandlerWithRealFirestore(t *testing.T) {
+	os.Setenv("environment", "test")
+	
+	ctx := context.Background()
+	client := newFirestoreMockClient(ctx)
+	defer client.Close()
+
+	userId := "integration-test-user"
+	sessionId := "integration-session"
+	userData := map[string]interface{}{
+		"userId":        userId,
+		"profileURL":    "http://example.com",
+		"chaincode":     "TESTCHAIN",
+		"discordId":     "discord123",
+		"profileStatus": "PENDING",
+		"firstName":     "Integration",
+		"lastName":      "Test",
+		"email":         "integration@test.com",
+		"phone":         "1234567890",
+		"yoe":           3,
+		"company":       "Test Corp",
+		"designation":   "Tester",
+		"githubId":      "integrationtest",
+		"linkedin":      "integrationtest",
+		"website":       "https://integrationtest.com",
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		} else {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{
+				"first_name": "Integration",
+				"last_name": "Test",
+				"email": "integration@test.com",
+				"phone": "1234567890",
+				"yoe": 3,
+				"company": "Test Corp",
+				"designation": "Tester",
+				"github_id": "integrationtest",
+				"linkedin_id": "integrationtest",
+				"website": "https://integrationtest.com"
+			}`))
+		}
+	}))
+	defer server.Close()
+
+	userData["profileURL"] = server.URL
+
+	_, err := client.Collection("users").Doc(userId).Set(ctx, userData)
+	assert.NoError(t, err)
+
+	request := events.APIGatewayProxyRequest{
+		Body: fmt.Sprintf(`{"userId": "%s", "sessionId": "%s"}`, userId, sessionId),
+	}
+
+	response, err := handlerWithClient(request, client)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "Profile Saved", response.Body)
+	assert.Equal(t, 200, response.StatusCode)
+}
+
+func TestHandlerEdgeCases(t *testing.T) {
+	os.Setenv("environment", "test")
+	
+	ctx := context.Background()
+	client := newFirestoreMockClient(ctx)
+	defer client.Close()
+
+	testCases := []struct {
+		name           string
+		request        events.APIGatewayProxyRequest
+		userData       map[string]interface{}
+		expectedBody   string
+		expectedStatus int
+	}{
+		{
+			name: "invalid user data type",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"userId": "invalid-user", "sessionId": "session-1"}`,
+			},
+			userData: map[string]interface{}{
+				"userId":        "invalid-user",
+				"profileURL":    "http://example.com",
+				"chaincode":     "TESTCHAIN",
+				"discordId":     "discord123",
+				"profileStatus": "PENDING",
+				"firstName":     123, // Invalid type
+				"lastName":      "Doe",
+			},
+			expectedBody:   "Profile Skipped error in getting profile data",
+			expectedStatus: 200,
+		},
+		{
+			name: "missing discord ID",
+			request: events.APIGatewayProxyRequest{
+				Body: `{"userId": "no-discord-user", "sessionId": "session-1"}`,
+			},
+			userData: map[string]interface{}{
+				"userId":        "no-discord-user",
+				"profileURL":    "http://example.com",
+				"chaincode":     "TESTCHAIN",
+				"profileStatus": "PENDING",
+			},
+			expectedBody:   "Profile Skipped error in getting profile data", // Will fail health check
+			expectedStatus: 200,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := client.Collection("users").Doc(testCase.userData["userId"].(string)).Set(ctx, testCase.userData)
+			assert.NoError(t, err)
+
+			response, err := handlerWithClient(testCase.request, client)
+
+			assert.NoError(t, err)
+			assert.Equal(t, testCase.expectedBody, response.Body)
+			assert.Equal(t, testCase.expectedStatus, response.StatusCode)
+		})
+	}
+}
+
+func newFirestoreMockClient(ctx context.Context) *firestore.Client {
+	emulatorHost := os.Getenv("FIRESTORE_EMULATOR_HOST")
+	if emulatorHost == "" {
+		emulatorHost = "127.0.0.1:8090"
+	}
+	conn, _ := grpc.Dial(emulatorHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	client, _ := firestore.NewClient(ctx, "test-project", option.WithGRPCConn(conn))
+	return client
+}
+
+func handlerWithClient(request events.APIGatewayProxyRequest, client *firestore.Client) (events.APIGatewayProxyResponse, error) {
+	ctx := context.Background()
+	d := deps{
+		client: client,
+		ctx:    ctx,
+	}
+	return d.handler(request)
 }

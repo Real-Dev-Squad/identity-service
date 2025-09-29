@@ -1,43 +1,21 @@
 package main
 
 import (
+	"context"
 	"identity-service/layer/utils"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"cloud.google.com/go/firestore"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestHandler(t *testing.T) {
-	for _, test := range TestRequests {
-		t.Run(test.Name, func(t *testing.T) {
-			t.Parallel()
-			response, err := handler(test.Request)
-			
-			if test.ExpectedErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "project id is required")
-				assert.Equal(t, "", response.Body)
-			} else {
-				assert.NoError(t, err)
-			}
-			
-			assert.IsType(t, events.APIGatewayProxyResponse{}, response)
-		})
-	}
-}
-
-func TestHandlerStructure(t *testing.T) {
-	request := events.APIGatewayProxyRequest{}
-	
-	response, err := handler(request)
-	
-	assert.Error(t, err)
-	assert.IsType(t, events.APIGatewayProxyResponse{}, response)
-	assert.Empty(t, response.Body)
-}
 
 func TestCallProfileFunction(t *testing.T) {
 	for _, test := range ProfileLambdaCallPayloadTests {
@@ -310,4 +288,172 @@ func TestProfileCountingLogic(t *testing.T) {
 		assert.Equal(t, len(mockProfiles), totalProfilesCalled)
 		assert.Greater(t, totalProfilesCalled, 0)
 	})
+}
+
+func newFirestoreMockClient(ctx context.Context) *firestore.Client {
+	emulatorHost := os.Getenv("FIRESTORE_EMULATOR_HOST")
+	if emulatorHost == "" {
+		emulatorHost = "127.0.0.1:8090"
+	}
+	conn, _ := grpc.Dial(emulatorHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	client, _ := firestore.NewClient(ctx, "test-project", option.WithGRPCConn(conn))
+	return client
+}
+
+func handlerWithClient(request events.APIGatewayProxyRequest, client *firestore.Client) (events.APIGatewayProxyResponse, error) {
+	ctx := context.Background()
+	d := deps{
+		client: client,
+		ctx:    ctx,
+	}
+	return d.handler(request)
+}
+
+func TestHandlerIntegration(t *testing.T) {
+	ctx := context.Background()
+	client := newFirestoreMockClient(ctx)
+	defer client.Close()
+
+	testCases := []struct {
+		name           string
+		request        events.APIGatewayProxyRequest
+		userData       []map[string]interface{}
+		expectedBody   string
+		expectedStatus int
+		expectedError  bool
+	}{
+		{
+			name: "no verified users",
+			request: events.APIGatewayProxyRequest{
+				HTTPMethod: "GET",
+				Path:       "/call-profiles",
+			},
+			userData: []map[string]interface{}{
+				{
+					"userId":        "user1",
+					"profileStatus": "PENDING",
+				},
+				{
+					"userId":        "user2",
+					"profileStatus": "BLOCKED",
+				},
+			},
+			expectedBody:   "Total Profiles called in session is 0",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+		{
+			name: "single verified user",
+			request: events.APIGatewayProxyRequest{
+				HTTPMethod: "GET",
+				Path:       "/call-profiles",
+			},
+			userData: []map[string]interface{}{
+				{
+					"userId":        "user1",
+					"profileStatus": "VERIFIED",
+				},
+			},
+			expectedBody:   "Total Profiles called in session is 1",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+		{
+			name: "multiple verified users",
+			request: events.APIGatewayProxyRequest{
+				HTTPMethod: "GET",
+				Path:       "/call-profiles",
+			},
+			userData: []map[string]interface{}{
+				{
+					"userId":        "user1",
+					"profileStatus": "VERIFIED",
+				},
+				{
+					"userId":        "user2",
+					"profileStatus": "VERIFIED",
+				},
+				{
+					"userId":        "user3",
+					"profileStatus": "VERIFIED",
+				},
+				{
+					"userId":        "user4",
+					"profileStatus": "PENDING",
+				},
+			},
+			expectedBody:   "Total Profiles called in session is 3",
+			expectedStatus: 200,
+			expectedError:  false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			for _, userData := range testCase.userData {
+				userId := userData["userId"].(string)
+				_, err := client.Collection("users").Doc(userId).Set(ctx, userData)
+				assert.NoError(t, err)
+			}
+
+			response, err := handlerWithClient(testCase.request, client)
+
+			if testCase.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, testCase.expectedStatus, response.StatusCode)
+				assert.Equal(t, testCase.expectedBody, response.Body)
+			}
+
+			for _, userData := range testCase.userData {
+				userId := userData["userId"].(string)
+				client.Collection("users").Doc(userId).Delete(ctx)
+			}
+			
+			iter := client.Collection("identitySessionIds").Documents(ctx)
+			for {
+				doc, err := iter.Next()
+				if err != nil {
+					break
+				}
+				doc.Ref.Delete(ctx)
+			}
+		})
+	}
+}
+
+func TestHandlerWithRealFirestore(t *testing.T) {
+	ctx := context.Background()
+	client := newFirestoreMockClient(ctx)
+	defer client.Close()
+
+	request := events.APIGatewayProxyRequest{
+		HTTPMethod: "GET",
+		Path:       "/call-profiles",
+	}
+
+	response, err := handlerWithClient(request, client)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, response.StatusCode)
+	assert.Equal(t, "Total Profiles called in session is 0", response.Body)
+}
+
+func TestSessionIdDocumentCreationIntegration(t *testing.T) {
+	ctx := context.Background()
+	client := newFirestoreMockClient(ctx)
+	defer client.Close()
+
+	docRef, _, err := client.Collection("identitySessionIds").Add(ctx, map[string]interface{}{
+		"Timestamp": time.Now(),
+	})
+	
+	assert.NoError(t, err)
+	assert.NotNil(t, docRef)
+	
+	doc, err := docRef.Get(ctx)
+	assert.NoError(t, err)
+	assert.True(t, doc.Exists())
+	
+	docRef.Delete(ctx)
 }

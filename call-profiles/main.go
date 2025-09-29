@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"cloud.google.com/go/firestore"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 
@@ -15,6 +17,11 @@ import (
 )
 
 var wg sync.WaitGroup
+
+type deps struct {
+	client *firestore.Client
+	ctx    context.Context
+}
 
 func callProfile(userId string, sessionId string) {
 	defer wg.Done()
@@ -30,15 +37,8 @@ func callProfile(userId string, sessionId string) {
 	}
 }
 
-func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	ctx := context.Background()
-	client, err := utils.InitializeFirestoreClient(ctx)
-
-	if err != nil {
-		return events.APIGatewayProxyResponse{}, err
-	}
-
-	docRef, _, sessionIdErr := client.Collection("identitySessionIds").Add(ctx, map[string]interface{}{
+func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	docRef, _, sessionIdErr := d.client.Collection("identitySessionIds").Add(d.ctx, map[string]interface{}{
 		"Timestamp": time.Now(),
 	})
 
@@ -48,7 +48,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	totalProfilesCalled := 0
 
-	iter := client.Collection("users").Where("profileStatus", "==", "VERIFIED").Documents(ctx)
+	iter := d.client.Collection("users").Where("profileStatus", "==", "VERIFIED").Documents(d.ctx)
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
@@ -64,7 +64,6 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	wg.Wait()
 
-	defer client.Close()
 	return events.APIGatewayProxyResponse{
 		Body:       fmt.Sprintf("Total Profiles called in session is %d", totalProfilesCalled),
 		StatusCode: 200,
@@ -72,5 +71,16 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 }
 
 func main() {
-	lambda.Start(handler)
+	ctx := context.Background()
+	client, err := utils.InitializeFirestoreClient(ctx)
+	if err != nil {
+		log.Fatalf("Failed to initialize Firestore client: %v", err)
+	}
+
+	d := deps{
+		client: client,
+		ctx:    ctx,
+	}
+
+	lambda.Start(d.handler)
 }
