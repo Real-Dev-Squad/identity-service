@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,16 +13,21 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/stretchr/testify/assert"
 )
 
 func newFirestoreMockClient(ctx context.Context) *firestore.Client {
-	client, err := firestore.NewClient(ctx, "test")
-	if err != nil {
-		log.Fatalf("firebase.NewClient err: %v", err)
+	emulatorHost := os.Getenv("FIRESTORE_EMULATOR_HOST")
+	if emulatorHost == "" {
+		emulatorHost = "127.0.0.1:8090"
 	}
-
+	conn, _ := grpc.Dial(emulatorHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	client, _ := firestore.NewClient(ctx, "test-project", option.WithGRPCConn(conn))
 	return client
 }
 

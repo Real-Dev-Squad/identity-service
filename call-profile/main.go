@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"identity-service/layer/utils"
+	"log"
 	"net/http"
 	"time"
 
@@ -121,7 +122,7 @@ func main() {
 	ctx := context.Background()
 	client, err := utils.InitializeFirestoreClient(ctx)
 	if err != nil {
-		return
+		log.Fatalf("Failed to initialize Firestore client: %v", err)
 	}
 
 	d := deps{

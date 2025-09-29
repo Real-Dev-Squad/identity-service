@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -384,7 +385,11 @@ func TestHandlerResponseStructure(t *testing.T) {
 }
 
 func newFirestoreMockClient(ctx context.Context) *firestore.Client {
-	conn, _ := grpc.Dial("127.0.0.1:8090", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	emulatorHost := os.Getenv("FIRESTORE_EMULATOR_HOST")
+	if emulatorHost == "" {
+		emulatorHost = "127.0.0.1:8090"
+	}
+	conn, _ := grpc.Dial(emulatorHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	client, _ := firestore.NewClient(ctx, "test-project", option.WithGRPCConn(conn))
 	return client
 }
