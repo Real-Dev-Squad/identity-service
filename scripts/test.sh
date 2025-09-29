@@ -6,8 +6,10 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 go mod tidy
 
 declare -a exit_codes=()
-declare -a modules=("health" "call-profile" "call-profiles" "health-check")
+declare -a modules=("health")
+declare -a firebase_modules=("call-profile" "verify" "health-check" "call-profiles")
 
+# Run modules that don't need Firebase emulator
 for module in "${modules[@]}"; do
     echo "Running $module tests..."
     cd "$module" || exit 1
@@ -17,20 +19,23 @@ for module in "${modules[@]}"; do
     cd .. || exit 1
 done
 
-echo "Running verify tests..."
-cd verify || exit 1
-npx firebase-tools --project="test" emulators:exec "go test -v -cover -coverprofile=\"$TEMP_DIR/verify.out\""
-VERIFY_EXIT=$?
-[ $VERIFY_EXIT -ne 0 ] && echo "Firebase test exited with error (verify)"
-exit_codes+=($VERIFY_EXIT)
-npx kill-port 8090 2>/dev/null || true
-cd .. || exit 1
+# Run modules that need Firebase emulator
+for module in "${firebase_modules[@]}"; do
+    echo "Running $module tests with Firebase emulator..."
+    cd "$module" || exit 1
+    npx firebase-tools --project="test" emulators:exec "go test -v -cover -coverprofile=\"$TEMP_DIR/$module.out\""
+    MODULE_EXIT=$?
+    [ $MODULE_EXIT -ne 0 ] && echo "Firebase test exited with error ($module)"
+    exit_codes+=($MODULE_EXIT)
+    npx kill-port 8090 2>/dev/null || true
+    cd .. || exit 1
+done
 
 echo "================================"
 echo "COVERAGE REPORTS"
 echo "================================"
 
-all_modules=("${modules[@]}" "verify")
+all_modules=("${modules[@]}" "${firebase_modules[@]}")
 for module in "${all_modules[@]}"; do
     if [ -f "$TEMP_DIR/$module.out" ]; then
         echo "================================"
