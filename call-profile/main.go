@@ -30,7 +30,7 @@ func handler(d *utils.Deps, request events.APIGatewayProxyRequest) (events.APIGa
 	var user utils.User
 	err = dsnap.DataTo(&user)
 	if err != nil {
-		utils.LogProfileSkipped(d.Client, d.Ctx, userId, "UserData Type Error: "+fmt.Sprintln(err), sessionId)
+		utils.LogProfileSkipped(d.Client, d.Ctx, "UserData Type Error: "+fmt.Sprintln(err), userId, sessionId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No User Data",
 			StatusCode: 200,
@@ -40,7 +40,7 @@ func handler(d *utils.Deps, request events.APIGatewayProxyRequest) (events.APIGa
 	discordId := user.DiscordID
 
 	if user.ProfileURL == "" {
-		utils.LogProfileSkipped(d.Client, d.Ctx, userId, "Profile URL not available", sessionId)
+		utils.LogProfileSkipped(d.Client, d.Ctx, "Profile URL not available", userId, sessionId)
 		utils.SetProfileStatusBlocked(d.Client, d.Ctx, userId, "Profile URL not available", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No Profile URL",
@@ -50,7 +50,7 @@ func handler(d *utils.Deps, request events.APIGatewayProxyRequest) (events.APIGa
 
 	_, chaincodeExists := data["chaincode"]
 	if !chaincodeExists {
-		utils.LogProfileSkipped(d.Client, d.Ctx, userId, "Chaincode Not Found", sessionId)
+		utils.LogProfileSkipped(d.Client, d.Ctx, "Chaincode Not Found", userId, sessionId)
 		utils.SetProfileStatusBlocked(d.Client, d.Ctx, userId, "Chaincode Not Found", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped Chaincode Not Found",
@@ -59,7 +59,7 @@ func handler(d *utils.Deps, request events.APIGatewayProxyRequest) (events.APIGa
 	}
 
 	if user.Chaincode == "" {
-		utils.LogProfileSkipped(d.Client, d.Ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId)
+		utils.LogProfileSkipped(d.Client, d.Ctx, "Profile Service Blocked or Chaincode is empty", userId, sessionId)
 		utils.SetProfileStatusBlocked(d.Client, d.Ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped Profile Service Blocked",
@@ -73,7 +73,7 @@ func handler(d *utils.Deps, request events.APIGatewayProxyRequest) (events.APIGa
 	var userData utils.Diff
 	err = dsnap.DataTo(&userData)
 	if err != nil {
-		utils.LogProfileSkipped(d.Client, d.Ctx, userId, "UserData Type Error: "+fmt.Sprintln(err), sessionId)
+		utils.LogProfileSkipped(d.Client, d.Ctx, "UserData Type Error: "+fmt.Sprintln(err), userId, sessionId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No User Data",
 			StatusCode: 200,
@@ -94,7 +94,7 @@ func handler(d *utils.Deps, request events.APIGatewayProxyRequest) (events.APIGa
 
 	utils.LogHealth(d.Client, d.Ctx, userId, isServiceRunning, sessionId)
 	if !isServiceRunning {
-		utils.LogProfileSkipped(d.Client, d.Ctx, userId, "Profile Service Down", sessionId)
+		utils.LogProfileSkipped(d.Client, d.Ctx, "Profile Service Down", userId, sessionId)
 		utils.SetProfileStatusBlocked(d.Client, d.Ctx, userId, "Profile Service Down", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped Service Down",

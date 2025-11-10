@@ -92,21 +92,28 @@ func SetProfileStatusBlocked(client *firestore.Client, ctx context.Context, user
 		discordURL := os.Getenv(Constants["DISCORD_BOT_URL"]) + "/profile/blocked"
 		req, err := http.NewRequestWithContext(ctx, "POST", discordURL, responseBody)
 		if err != nil {
-			LogWarnWithError("Failed to create Discord bot request", map[string]interface{}{
+			LogWarnWithError("Failed to create Discord bot request", err, map[string]interface{}{
 				"function": "SetProfileStatusBlocked",
 				"userId":   userId,
-			}, err)
+			})
 		} else {
 			req.Header.Add("Content-Type", "application/json")
 			req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", tokenString))
 			
-			httpClient := CreateHTTPClient(10 * time.Second)
-			_, err = DoRequestWithContext(ctx, httpClient, req)
+			// Create context with timeout and use client without timeout
+			reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			req = req.WithContext(reqCtx)
+			httpClient := &http.Client{} // No timeout - rely on context
+			resp, err := httpClient.Do(req)
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
 			if err != nil {
-				LogWarnWithError("Failed to notify Discord bot", map[string]interface{}{
+				LogWarnWithError("Failed to notify Discord bot", err, map[string]interface{}{
 					"function": "SetProfileStatusBlocked",
 					"userId":   userId,
-				}, err)
+				})
 			}
 		}
 	}
@@ -134,24 +141,27 @@ func Getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	hashedChaincode, err := bcrypt.GenerateFromPassword([]byte(chaincode), bcrypt.DefaultCost)
 	if err != nil {
 		errMsg := fmt.Sprintf("chaincode encryption failed: %v", err)
-		LogProfileSkipped(client, ctx, userId, errMsg, sessionId)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
 		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
 		return fmt.Errorf("chaincode not encrypted: %w", err)
 	}
 
-	httpClient := CreateHTTPClient(30 * time.Second)
-	req, err := http.NewRequestWithContext(ctx, "GET", userUrl, nil)
+	// Create context with timeout and use client without timeout
+	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, "GET", userUrl, nil)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to create request: %v", err)
-		LogProfileSkipped(client, ctx, userId, errMsg, sessionId)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
 		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
 		return fmt.Errorf("error creating request: %w", err)
 	}
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", string(hashedChaincode)))
-	resp, err := DoRequestWithContext(ctx, httpClient, req)
+	httpClient := &http.Client{} // No timeout - rely on context
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to get profile data: %v", err)
-		LogProfileSkipped(client, ctx, userId, errMsg, sessionId)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
 		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
 		return fmt.Errorf("error getting profile data: %w", err)
 	}
@@ -159,13 +169,13 @@ func Getdata(client *firestore.Client, ctx context.Context, userId string, userU
 
 	if resp.StatusCode == 401 {
 		errMsg := "Unauthenticated Access to Profile Data"
-		LogProfileSkipped(client, ctx, userId, errMsg, sessionId)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
 		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
-		return NewProfileError("UNAUTHENTICATED", errMsg, nil)
+		return NewProfileError("UNAUTHENTICATED", errMsg, 401, nil)
 	}
 	if resp.StatusCode != 200 {
 		errMsg := "Error in getting Profile Data"
-		LogProfileSkipped(client, ctx, userId, errMsg, sessionId)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
 		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
 		return fmt.Errorf("error in getting profile data: status code %d", resp.StatusCode)
 	}
@@ -173,7 +183,7 @@ func Getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	r, err := io.ReadAll(resp.Body)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to read response: %v", err)
-		LogProfileSkipped(client, ctx, userId, errMsg, sessionId)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
 		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
 		return fmt.Errorf("error reading profile data: %w", err)
 	}
@@ -181,7 +191,7 @@ func Getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	err = json.Unmarshal([]byte(r), &res)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to unmarshal JSON: %v", err)
-		LogProfileSkipped(client, ctx, userId, errMsg, sessionId)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
 		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
 		return fmt.Errorf("error converting data to json: %w", err)
 	}
@@ -189,7 +199,7 @@ func Getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	err = res.Validate()
 	if err != nil {
 		errMsg := fmt.Sprintf("validation failed: %v", err)
-		LogProfileSkipped(client, ctx, userId, errMsg, sessionId)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
 		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
 		return fmt.Errorf("error in validation: %w", err)
 	}
@@ -197,10 +207,10 @@ func Getdata(client *firestore.Client, ctx context.Context, userId string, userU
 	lastPendingDiff, lastPendingDiffId, err := getLastDiff(client, ctx, userId, "PENDING")
 	if err != nil {
 		// Log error but continue processing
-		LogWarnWithError("Failed to get last pending diff", map[string]interface{}{
+		LogWarnWithError("Failed to get last pending diff", err, map[string]interface{}{
 			"function": "Getdata",
 			"userId":   userId,
-		}, err)
+		})
 	}
 
 	if lastPendingDiff != res && userData != res {
@@ -209,10 +219,10 @@ func Getdata(client *firestore.Client, ctx context.Context, userId string, userU
 		}
 		lastRejectedDiff, lastRejectedDiffId, err := getLastDiff(client, ctx, userId, Constants["NOT_APPROVED"])
 		if err != nil {
-			LogWarnWithError("Failed to get last rejected diff", map[string]interface{}{
+			LogWarnWithError("Failed to get last rejected diff", err, map[string]interface{}{
 				"function": "Getdata",
 				"userId":   userId,
-			}, err)
+			})
 		}
 		if lastRejectedDiff != res {
 			err = generateAndStoreDiff(client, ctx, res, userId, sessionId)
@@ -220,19 +230,19 @@ func Getdata(client *firestore.Client, ctx context.Context, userId string, userU
 				return fmt.Errorf("failed to generate and store diff: %w", err)
 			}
 		} else {
-			LogProfileSkipped(client, ctx, userId, "Last Rejected Diff is same as New Profile Data. Rejected Diff Id: "+lastRejectedDiffId, sessionId)
+			LogProfileSkipped(client, ctx, "Last Rejected Diff is same as New Profile Data. Rejected Diff Id: "+lastRejectedDiffId, userId, sessionId)
 			// This is not an error, just a skip reason
 			return nil
 		}
 	} else if userData == res {
-		LogProfileSkipped(client, ctx, userId, "Current User Data is same as New Profile Data", sessionId)
+		LogProfileSkipped(client, ctx, "Current User Data is same as New Profile Data", userId, sessionId)
 		if lastPendingDiffId != "" {
 			SetNotApproved(client, ctx, lastPendingDiffId)
 		}
 		// This is not an error, just a skip reason
 		return nil
 	} else {
-		LogProfileSkipped(client, ctx, userId, "Last Pending Diff is same as New Profile Data", sessionId)
+		LogProfileSkipped(client, ctx, "Last Pending Diff is same as New Profile Data", userId, sessionId)
 		// This is not an error, just a skip reason
 		return nil
 	}

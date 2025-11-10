@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"time"
 
 	"cloud.google.com/go/firestore"
 
@@ -17,23 +18,32 @@ type Deps struct {
 type HandlerFunc func(*Deps, events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error)
 
 func InitializeLambdaWithFirestore(functionName string, handlerFunc HandlerFunc) {
-	ctx := context.Background()
+	initCtx := context.Background()
 	logger := GetLogger()
 	
-	client, err := InitializeFirestoreClient(ctx)
+	client, err := InitializeFirestoreClient(initCtx)
 	if err != nil {
 		logger.Error("Failed to initialize Firestore client", err, map[string]interface{}{
 			"function": functionName,
 		})
+		lambda.Start(func(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+			return events.APIGatewayProxyResponse{
+				StatusCode: 500,
+				Body:       "Service initialization failed",
+			}, nil
+		})
 		return
 	}
 
-	deps := &Deps{
-		Client: client,
-		Ctx:    ctx,
-	}
-
 	wrappedHandler := func(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+		reqCtx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
+		defer cancel()
+		
+		deps := &Deps{
+			Client: client,
+			Ctx:    reqCtx,
+		}
+		
 		return handlerFunc(deps, request)
 	}
 

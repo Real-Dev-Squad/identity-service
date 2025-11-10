@@ -19,6 +19,7 @@ var (
 type ProfileError struct {
 	Code    string
 	Message string
+	Status  int
 	Err     error
 }
 
@@ -33,26 +34,28 @@ func (e *ProfileError) Unwrap() error {
 	return e.Err
 }
 
-func NewProfileError(code, message string, err error) *ProfileError {
+func NewProfileError(code, message string, status int, err error) *ProfileError {
 	return &ProfileError{
 		Code:    code,
 		Message: message,
+		Status:  status,
 		Err:     err,
 	}
 }
 
 func HandleLambdaError(err error) (events.APIGatewayProxyResponse, error) {
 	if err == nil {
-		return events.APIGatewayProxyResponse{
-			Body:       "Internal server error",
-			StatusCode: 500,
-		}, nil
+		panic("HandleLambdaError called with nil error - this indicates a programming error")
 	}
 
 	if profileErr, ok := err.(*ProfileError); ok {
+		statusCode := profileErr.Status
+		if statusCode == 0 {
+			statusCode = 400
+		}
 		return events.APIGatewayProxyResponse{
 			Body:       fmt.Sprintf("Profile Error: %s", profileErr.Message),
-			StatusCode: 400,
+			StatusCode: statusCode,
 		}, nil
 	}
 

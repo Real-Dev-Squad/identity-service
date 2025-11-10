@@ -17,8 +17,9 @@ const (
 )
 
 type Logger struct {
-	service string
-	env     string
+	service       string
+	env           string
+	contextFields map[string]interface{}
 }
 
 type LogEntry struct {
@@ -36,18 +37,27 @@ func NewLogger(service string) *Logger {
 		env = "DEVELOPMENT"
 	}
 	return &Logger{
-		service: service,
-		env:     env,
+		service:       service,
+		env:           env,
+		contextFields: make(map[string]interface{}),
 	}
 }
 
 func (l *Logger) log(level LogLevel, message string, fields map[string]interface{}, err error) {
+	mergedFields := make(map[string]interface{})
+	for k, v := range l.contextFields {
+		mergedFields[k] = v
+	}
+	for k, v := range fields {
+		mergedFields[k] = v
+	}
+	
 	entry := LogEntry{
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Level:     string(level),
 		Service:   l.service,
 		Message:   message,
-		Fields:    fields,
+		Fields:    mergedFields,
 	}
 
 	if err != nil {
@@ -85,8 +95,9 @@ func (l *Logger) Warn(message string, fields ...map[string]interface{}) {
 	l.log(LogLevelWarn, message, mergedFields, nil)
 }
 
-func (l *Logger) WarnWithError(message string, fields map[string]interface{}, err error) {
-	l.log(LogLevelWarn, message, fields, err)
+func (l *Logger) WarnWithError(message string, err error, fields ...map[string]interface{}) {
+	mergedFields := mergeFields(fields...)
+	l.log(LogLevelWarn, message, mergedFields, err)
 }
 
 func (l *Logger) Error(message string, err error, fields ...map[string]interface{}) {
@@ -95,7 +106,18 @@ func (l *Logger) Error(message string, err error, fields ...map[string]interface
 }
 
 func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
-	return l
+	newLogger := &Logger{
+		service:       l.service,
+		env:           l.env,
+		contextFields: make(map[string]interface{}),
+	}
+	for k, v := range l.contextFields {
+		newLogger.contextFields[k] = v
+	}
+	for k, v := range fields {
+		newLogger.contextFields[k] = v
+	}
+	return newLogger
 }
 
 func mergeFields(fields ...map[string]interface{}) map[string]interface{} {
@@ -130,8 +152,8 @@ func LogWarn(message string, fields ...map[string]interface{}) {
 	defaultLogger.Warn(message, fields...)
 }
 
-func LogWarnWithError(message string, fields map[string]interface{}, err error) {
-	defaultLogger.WarnWithError(message, fields, err)
+func LogWarnWithError(message string, err error, fields ...map[string]interface{}) {
+	defaultLogger.WarnWithError(message, err, fields...)
 }
 
 func LogError(message string, err error, fields ...map[string]interface{}) {

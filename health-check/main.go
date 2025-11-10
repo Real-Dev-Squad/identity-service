@@ -29,10 +29,10 @@ func callProfileHealth(userUrl string) {
 	requestURL := fmt.Sprintf("%shealth", userUrl)
 	_, err1 := utils.GetWithContext(context.Background(), requestURL, 2*time.Second)
 	if err1 != nil {
-		logger.WarnWithError("Service not running", map[string]interface{}{
+		logger.WarnWithError("Service not running", err1, map[string]interface{}{
 			"function":  "callProfileHealth",
 			"profileURL": userUrl,
-		}, err1)
+		})
 	}
 }
 
