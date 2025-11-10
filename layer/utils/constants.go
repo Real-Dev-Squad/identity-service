@@ -52,6 +52,14 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+type User struct {
+	ProfileURL    string `firestore:"profileURL,omitempty"`
+	ProfileStatus string `firestore:"profileStatus,omitempty"`
+	Chaincode     string `firestore:"chaincode,omitempty"`
+	DiscordID     string `firestore:"discordId,omitempty"`
+	UpdatedAt     int64  `firestore:"updated_at,omitempty"`
+}
+
 var Constants = map[string]string{
 	"ENV_DEVELOPMENT":              "DEVELOPMENT",
 	"ENV_PRODUCTION":               "PRODUCTION",

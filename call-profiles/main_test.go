@@ -302,11 +302,11 @@ func newFirestoreMockClient(ctx context.Context) *firestore.Client {
 
 func handlerWithClient(request events.APIGatewayProxyRequest, client *firestore.Client) (events.APIGatewayProxyResponse, error) {
 	ctx := context.Background()
-	d := deps{
-		client: client,
-		ctx:    ctx,
+	d := &utils.Deps{
+		Client: client,
+		Ctx:    ctx,
 	}
-	return d.handler(request)
+	return handler(d, request)
 }
 
 func TestHandlerIntegration(t *testing.T) {

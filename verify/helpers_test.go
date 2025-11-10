@@ -210,7 +210,7 @@ func TestVerify(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 
-			status, err := verify(server.URL+testCase.path, testCase.chaincode, testCase.salt)
+			status, err := verify(context.Background(), server.URL+testCase.path, testCase.chaincode, testCase.salt)
 
 			assert.Equal(t, testCase.expectedStatus, status)
 			assert.Equal(t, testCase.expectedErr, err)

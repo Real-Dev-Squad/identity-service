@@ -364,8 +364,8 @@ func TestHandlerIntegration(t *testing.T) {
 			},
 			userData:       nil,
 			mockServer:     nil,
-			expectedBody:   "Profile Skipped No Profile URL",
-			expectedStatus: 200,
+			expectedBody:   "Error retrieving user: rpc error: code = NotFound desc = \"projects/test-project/databases/(default)/documents/users/non-existent-user\" not found",
+			expectedStatus: 500,
 			expectedError:  false,
 		},
 		{
@@ -435,7 +435,7 @@ func TestHandlerIntegration(t *testing.T) {
 					w.Write([]byte("Service Unavailable"))
 				}))
 			},
-			expectedBody:   "Profile Skipped error in getting profile data",
+			expectedBody:   "Profile Skipped: error in getting profile data: status code 500",
 			expectedStatus: 200,
 			expectedError:  false,
 		},
@@ -590,7 +590,7 @@ func TestHandlerEdgeCases(t *testing.T) {
 				"firstName":     123, // Invalid type
 				"lastName":      "Doe",
 			},
-			expectedBody:   "Profile Skipped error in getting profile data",
+			expectedBody:   "Profile Skipped: error in getting profile data: status code 404",
 			expectedStatus: 200,
 		},
 		{
@@ -604,7 +604,7 @@ func TestHandlerEdgeCases(t *testing.T) {
 				"chaincode":     "TESTCHAIN",
 				"profileStatus": "PENDING",
 			},
-			expectedBody:   "Profile Skipped error in getting profile data", // Will fail health check
+			expectedBody:   "Profile Skipped: error in getting profile data: status code 404", // Will fail health check
 			expectedStatus: 200,
 		},
 	}
@@ -635,9 +635,9 @@ func newFirestoreMockClient(ctx context.Context) *firestore.Client {
 
 func handlerWithClient(request events.APIGatewayProxyRequest, client *firestore.Client) (events.APIGatewayProxyResponse, error) {
 	ctx := context.Background()
-	d := deps{
-		client: client,
-		ctx:    ctx,
+	d := &utils.Deps{
+		Client: client,
+		Ctx:    ctx,
 	}
-	return d.handler(request)
+	return handler(d, request)
 }

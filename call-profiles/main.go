@@ -1,30 +1,17 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"identity-service/layer/utils"
-	"log"
-	"sync"
 	"time"
 
-	"cloud.google.com/go/firestore"
-
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
 
 	"google.golang.org/api/iterator"
 )
 
-var wg sync.WaitGroup
-
-type deps struct {
-	client *firestore.Client
-	ctx    context.Context
-}
-
 func callProfile(userId string, sessionId string) {
-	defer wg.Done()
+	logger := utils.GetLogger()
 
 	payload := utils.ProfileLambdaCallPayload{
 		UserId:    userId,
@@ -33,12 +20,16 @@ func callProfile(userId string, sessionId string) {
 
 	err := utils.InvokeProfileLambda(payload)
 	if err != nil {
-		log.Println("error calling profile lambda", err)
+		logger.Error("Error calling profile lambda", err, map[string]interface{}{
+			"function":  "callProfile",
+			"userId":    userId,
+			"sessionId": sessionId,
+		})
 	}
 }
 
-func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	docRef, _, sessionIdErr := d.client.Collection("identitySessionIds").Add(d.ctx, map[string]interface{}{
+func handler(d *utils.Deps, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	docRef, _, sessionIdErr := d.Client.Collection("identitySessionIds").Add(d.Ctx, map[string]interface{}{
 		"Timestamp": time.Now(),
 	})
 
@@ -48,21 +39,32 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 
 	totalProfilesCalled := 0
 
-	iter := d.client.Collection("users").Where("profileStatus", "==", "VERIFIED").Documents(d.ctx)
+	workerPool := utils.NewWorkerPool(10, 100)
+	defer workerPool.Close()
+
+	iter := d.Client.Collection("users").Where("profileStatus", "==", "VERIFIED").Documents(d.Ctx)
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
-			log.Fatalf("Failed to iterate: %v", err)
+			return events.APIGatewayProxyResponse{
+				Body:       fmt.Sprintf("Failed to iterate users: %v", err),
+				StatusCode: 500,
+			}, nil
 		}
+		
+		userId := doc.Ref.ID
+		sessionId := docRef.ID
+		
 		totalProfilesCalled += 1
-		wg.Add(1)
-		go callProfile(doc.Ref.ID, docRef.ID)
+		workerPool.Submit(func() {
+			callProfile(userId, sessionId)
+		})
 	}
 
-	wg.Wait()
+	workerPool.Wait()
 
 	return events.APIGatewayProxyResponse{
 		Body:       fmt.Sprintf("Total Profiles called in session is %d", totalProfilesCalled),
@@ -71,16 +73,5 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 }
 
 func main() {
-	ctx := context.Background()
-	client, err := utils.InitializeFirestoreClient(ctx)
-	if err != nil {
-		log.Fatalf("Failed to initialize Firestore client: %v", err)
-	}
-
-	d := deps{
-		client: client,
-		ctx:    ctx,
-	}
-
-	lambda.Start(d.handler)
+	utils.InitializeLambdaWithFirestore("call-profiles", handler)
 }
