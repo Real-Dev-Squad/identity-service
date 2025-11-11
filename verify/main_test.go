@@ -19,6 +19,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/stretchr/testify/assert"
+	"identity-service/layer/utils"
 )
 
 func newFirestoreMockClient(ctx context.Context) *firestore.Client {
@@ -141,11 +142,11 @@ func TestVerifyFunction(t *testing.T) {
 			defer server.Close()
 
 			if testCase.name == "network timeout" {
-				status, err := verify(server.URL+testCase.profileURL, testCase.chaincode, testCase.salt)
+				status, err := verify(context.Background(), server.URL+testCase.profileURL, testCase.chaincode, testCase.salt)
 				assert.Equal(t, testCase.expectedStatus, status)
 				assert.True(t, testCase.expectedError == (err != nil))
 			} else {
-				status, err := verify(server.URL+testCase.profileURL, testCase.chaincode, testCase.salt)
+				status, err := verify(context.Background(), server.URL+testCase.profileURL, testCase.chaincode, testCase.salt)
 				assert.Equal(t, testCase.expectedStatus, status)
 				assert.True(t, testCase.expectedError == (err != nil))
 			}
@@ -255,14 +256,14 @@ func TestHandler(t *testing.T) {
 		},
 	}
 
-	d := deps{
-		client: client,
-		ctx:    ctx,
+	d := &utils.Deps{
+		Client: client,
+		Ctx:    ctx,
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			response, err := d.handler(testCase.request)
+			response, err := handler(d, testCase.request)
 			if testCase.name == "non-existent user" {
 				assert.Error(t, err)
 			} else {
@@ -346,16 +347,16 @@ func TestURLFormatting(t *testing.T) {
 				{Path: "profileURL", Value: server.URL},
 			})
 
-			d := deps{
-				client: client,
-				ctx:    ctx,
+			d := &utils.Deps{
+				Client: client,
+				Ctx:    ctx,
 			}
 
 			request := events.APIGatewayProxyRequest{
 				Body: fmt.Sprintf(`{ "userId": "%s" }`, userId),
 			}
 
-			response, err := d.handler(request)
+			response, err := handler(d, request)
 			
 			assert.NoError(t, err)
 			assert.Equal(t, 200, response.StatusCode)
@@ -401,16 +402,16 @@ func TestSaltGeneration(t *testing.T) {
 			{Path: "profileURL", Value: server.URL},
 		})
 
-		d := deps{
-			client: client,
-			ctx:    ctx,
+		d := &utils.Deps{
+			Client: client,
+			Ctx:    ctx,
 		}
 
 		request := events.APIGatewayProxyRequest{
 			Body: fmt.Sprintf(`{ "userId": "%s" }`, userId),
 		}
 
-		response, err := d.handler(request)
+		response, err := handler(d, request)
 		
 		assert.NoError(t, err)
 		assert.Equal(t, 200, response.StatusCode)
@@ -503,16 +504,16 @@ func TestHandlerEdgeCases(t *testing.T) {
 				t.Fatalf("failed to add user: %v", err)
 			}
 
-			d := deps{
-				client: client,
-				ctx:    ctx,
+			d := &utils.Deps{
+				Client: client,
+				Ctx:    ctx,
 			}
 
 			request := events.APIGatewayProxyRequest{
 				Body: testCase.requestBody,
 			}
 
-			response, err := d.handler(request)
+			response, err := handler(d, request)
 			
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), testCase.expectedError)
@@ -528,7 +529,7 @@ func TestVerifyFunctionCompleteCoverage(t *testing.T) {
 	}))
 	defer server.Close()
 	
-	status, err := verify(server.URL+"/verify", "testchaincode", "testsalt")
+	status, err := verify(context.Background(), server.URL+"/verify", "testchaincode", "testsalt")
 		assert.Equal(t, "BLOCKED", status)
 	assert.NoError(t, err)
 	
@@ -538,11 +539,11 @@ func TestVerifyFunctionCompleteCoverage(t *testing.T) {
 	}))
 	defer server2.Close()
 	
-	status, err = verify(server2.URL+"/verify", "testchaincode", "testsalt")
+	status, err = verify(context.Background(), server2.URL+"/verify", "testchaincode", "testsalt")
 	assert.Equal(t, "BLOCKED", status)
 	assert.NoError(t, err)
 	
-	status, err = verify("http://192.168.1.1:99999/verify", "testchaincode", "testsalt")
+	status, err = verify(context.Background(), "http://192.168.1.1:99999/verify", "testchaincode", "testsalt")
 	assert.Equal(t, "BLOCKED", status)
 	assert.Error(t, err)
 	
@@ -551,7 +552,7 @@ func TestVerifyFunctionCompleteCoverage(t *testing.T) {
 	}))
 	server3.Close()
 	
-	status, err = verify(server3.URL+"/verify", "testchaincode", "testsalt")
+	status, err = verify(context.Background(), server3.URL+"/verify", "testchaincode", "testsalt")
 	assert.Equal(t, "BLOCKED", status)
 	assert.Error(t, err)
 }
@@ -560,10 +561,10 @@ func TestMainFunctionComponents(t *testing.T) {
 	ctx := context.Background()
 	assert.NotNil(t, ctx)
 
-	d := deps{
-		client: nil,
-		ctx:    ctx,
+	d := &utils.Deps{
+		Client: nil,
+		Ctx:    ctx,
 	}
 	assert.NotNil(t, d)
-	assert.Equal(t, ctx, d.ctx)
+	assert.Equal(t, ctx, d.Ctx)
 }

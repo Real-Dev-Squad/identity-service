@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"log"
 	"os"
 	"time"
 
@@ -47,7 +46,10 @@ func getParameter(parameter string) string {
 			Name: &parameterName,
 		})
 		if err != nil {
-			log.Print(err.Error())
+			LogError("Failed to get parameter from SSM", err, map[string]interface{}{
+				"function":     "getParameter",
+				"parameterName": parameterName,
+			})
 		}
 
 		return *results.Parameter.Value

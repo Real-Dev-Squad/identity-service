@@ -1,25 +1,14 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"identity-service/layer/utils"
-	"log"
-	"net/http"
 	"time"
 
-	"cloud.google.com/go/firestore"
-
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
 )
 
-type deps struct {
-	client *firestore.Client
-	ctx    context.Context
-}
-
-func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func handler(d *utils.Deps, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	var userId, sessionId string = utils.GetDataFromBody([]byte(request.Body))
 	if userId == "" {
 		return events.APIGatewayProxyResponse{
@@ -28,52 +17,63 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 		}, nil
 	}
 
-	dsnap, err := d.client.Collection("users").Doc(userId).Get(d.ctx)
-
-	var userUrl string
-	var chaincode string
-	var discordId string
-
-	if str, ok := dsnap.Data()["discordId"].(string); ok {
-		discordId = str
-	} else {
-		discordId = ""
+	dsnap, err := d.Client.Collection("users").Doc(userId).Get(d.Ctx)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			Body:       fmt.Sprintf("Error retrieving user: %v", err),
+			StatusCode: 500,
+		}, nil
 	}
 
-	if str, ok := dsnap.Data()["profileURL"].(string); ok {
-		userUrl = str
-	} else {
-		utils.LogProfileSkipped(d.client, d.ctx, userId, "Profile URL not available", sessionId)
-		utils.SetProfileStatusBlocked(d.client, d.ctx, userId, "Profile URL not available", sessionId, discordId)
+	data := dsnap.Data()
+	
+	var user utils.User
+	err = dsnap.DataTo(&user)
+	if err != nil {
+		utils.LogProfileSkipped(d.Client, d.Ctx, "UserData Type Error: "+fmt.Sprintln(err), userId, sessionId)
+		return events.APIGatewayProxyResponse{
+			Body:       "Profile Skipped No User Data",
+			StatusCode: 200,
+		}, nil
+	}
+
+	discordId := user.DiscordID
+
+	if user.ProfileURL == "" {
+		utils.LogProfileSkipped(d.Client, d.Ctx, "Profile URL not available", userId, sessionId)
+		utils.SetProfileStatusBlocked(d.Client, d.Ctx, userId, "Profile URL not available", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No Profile URL",
 			StatusCode: 200,
 		}, nil
 	}
 
-	if str, ok := dsnap.Data()["chaincode"].(string); ok {
-		if str == "" {
-			utils.LogProfileSkipped(d.client, d.ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId)
-			utils.SetProfileStatusBlocked(d.client, d.ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId, discordId)
-			return events.APIGatewayProxyResponse{
-				Body:       "Profile Skipped Profile Service Blocked",
-				StatusCode: 200,
-			}, nil
-		}
-		chaincode = str
-	} else {
-		utils.LogProfileSkipped(d.client, d.ctx, userId, "Chaincode Not Found", sessionId)
-		utils.SetProfileStatusBlocked(d.client, d.ctx, userId, "Chaincode Not Found", sessionId, discordId)
+	_, chaincodeExists := data["chaincode"]
+	if !chaincodeExists {
+		utils.LogProfileSkipped(d.Client, d.Ctx, "Chaincode Not Found", userId, sessionId)
+		utils.SetProfileStatusBlocked(d.Client, d.Ctx, userId, "Chaincode Not Found", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped Chaincode Not Found",
 			StatusCode: 200,
 		}, nil
 	}
 
+	if user.Chaincode == "" {
+		utils.LogProfileSkipped(d.Client, d.Ctx, "Profile Service Blocked or Chaincode is empty", userId, sessionId)
+		utils.SetProfileStatusBlocked(d.Client, d.Ctx, userId, "Profile Service Blocked or Chaincode is empty", sessionId, discordId)
+		return events.APIGatewayProxyResponse{
+			Body:       "Profile Skipped Profile Service Blocked",
+			StatusCode: 200,
+		}, nil
+	}
+
+	userUrl := user.ProfileURL
+	chaincode := user.Chaincode
+
 	var userData utils.Diff
 	err = dsnap.DataTo(&userData)
 	if err != nil {
-		utils.LogProfileSkipped(d.client, d.ctx, userId, "UserData Type Error: "+fmt.Sprintln(err), sessionId)
+		utils.LogProfileSkipped(d.Client, d.Ctx, "UserData Type Error: "+fmt.Sprintln(err), userId, sessionId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped No User Data",
 			StatusCode: 200,
@@ -83,33 +83,31 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 	if userUrl[len(userUrl)-1] != '/' {
 		userUrl = userUrl + "/"
 	}
+	
+	_, serviceErr := utils.GetWithContext(d.Ctx, userUrl+"health", 5*time.Second)
 	var isServiceRunning bool
-	c := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-	_, serviceErr := c.Get(userUrl + "health")
 	if serviceErr != nil {
 		isServiceRunning = false
 	} else {
 		isServiceRunning = true
 	}
 
-	utils.LogHealth(d.client, d.ctx, userId, isServiceRunning, sessionId)
+	utils.LogHealth(d.Client, d.Ctx, userId, isServiceRunning, sessionId)
 	if !isServiceRunning {
-		utils.LogProfileSkipped(d.client, d.ctx, userId, "Profile Service Down", sessionId)
-		utils.SetProfileStatusBlocked(d.client, d.ctx, userId, "Profile Service Down", sessionId, discordId)
+		utils.LogProfileSkipped(d.Client, d.Ctx, "Profile Service Down", userId, sessionId)
+		utils.SetProfileStatusBlocked(d.Client, d.Ctx, userId, "Profile Service Down", sessionId, discordId)
 		return events.APIGatewayProxyResponse{
 			Body:       "Profile Skipped Service Down",
 			StatusCode: 200,
 		}, nil
 	}
 
-	dataErr := utils.Getdata(d.client, d.ctx, userId, userUrl, chaincode, utils.DiffToRes(userData), sessionId, discordId)
-	if dataErr != "" {
-		return events.APIGatewayProxyResponse{
-			Body:       "Profile Skipped " + dataErr,
-			StatusCode: 200,
-		}, nil
+	err = utils.Getdata(d.Client, d.Ctx, userId, userUrl, chaincode, utils.DiffToRes(userData), sessionId, discordId)
+	if err != nil {
+		if profileErr, ok := err.(*utils.ProfileError); ok {
+			return utils.HandleProfileSkippedError(profileErr.Message), nil
+		}
+		return utils.HandleProfileSkippedError(err.Error()), nil
 	}
 
 	return events.APIGatewayProxyResponse{
@@ -119,16 +117,5 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 }
 
 func main() {
-	ctx := context.Background()
-	client, err := utils.InitializeFirestoreClient(ctx)
-	if err != nil {
-		log.Fatalf("Failed to initialize Firestore client: %v", err)
-	}
-
-	d := deps{
-		client: client,
-		ctx:    ctx,
-	}
-
-	lambda.Start(d.handler)
+	utils.InitializeLambdaWithFirestore("call-profile", handler)
 }
