@@ -163,6 +163,7 @@ var ResValidationTests = []struct {
 			TwitterId:   "johndoe",
 			InstagramId: "johndoe",
 			Website:     "https://johndoe.com",
+			DOB:         "1990-01-15",
 		},
 		IsValid:     true,
 		Description: "Complete valid Res struct",
@@ -293,3 +294,4 @@ var EmptyUserIdTests = []struct {
 		Description:    "Null userId should return skip message",
 	},
 }
+ 

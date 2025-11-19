@@ -319,6 +319,7 @@ func TestHandlerIntegration(t *testing.T) {
 				"githubId":      "johndoe",
 				"linkedin":      "johndoe",
 				"website":       "https://johndoe.com",
+				"dob":           "1990-01-15",
 			},
 			mockServer: func() *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -337,7 +338,8 @@ func TestHandlerIntegration(t *testing.T) {
 							"designation": "Developer",
 							"github_id": "johndoe",
 							"linkedin_id": "johndoe",
-							"website": "https://johndoe.com"
+							"website": "https://johndoe.com",
+							"dob": "1990-01-15"
 						}`))
 					}
 				}))
@@ -522,6 +524,7 @@ func TestHandlerWithRealFirestore(t *testing.T) {
 		"githubId":      "integrationtest",
 		"linkedin":      "integrationtest",
 		"website":       "https://integrationtest.com",
+		"dob":           "1992-05-20",
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -540,7 +543,8 @@ func TestHandlerWithRealFirestore(t *testing.T) {
 				"designation": "Tester",
 				"github_id": "integrationtest",
 				"linkedin_id": "integrationtest",
-				"website": "https://integrationtest.com"
+				"website": "https://integrationtest.com",
+				"dob": "1992-05-20"
 			}`))
 		}
 	}))

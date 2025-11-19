@@ -26,6 +26,7 @@ func resToDiff(res Res, userId string) Diff {
 		TwitterId:   res.TwitterId,
 		InstagramId: res.InstagramId,
 		Website:     res.Website,
+		DOB:         res.DOB,
 	}
 }
 
@@ -43,6 +44,7 @@ func DiffToRes(diff Diff) Res {
 		TwitterId:   diff.TwitterId,
 		InstagramId: diff.InstagramId,
 		Website:     diff.Website,
+		DOB:         diff.DOB,
 	}
 }
 
