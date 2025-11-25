@@ -59,5 +59,6 @@ func (res Res) Validate() error {
 		validation.Field(&res.Designation, validation.Required),
 		validation.Field(&res.GithubId, validation.Required),
 		validation.Field(&res.LinkedIn, validation.Required),
-		validation.Field(&res.Website, is.URL))
+		validation.Field(&res.Website, is.URL),
+		validation.Field(&res.DOB, validation.Date("2006-01-02")))
 }
