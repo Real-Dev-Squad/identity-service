@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -37,7 +36,7 @@ func InitializeFirestoreClient(ctx context.Context) (*firestore.Client, error) {
 	return client, nil
 }
 
-func getLastDiff(client *firestore.Client, ctx context.Context, userId string, approval string) (Res, string) {
+func getLastDiff(client *firestore.Client, ctx context.Context, userId string, approval string) (Res, string, error) {
 	query := client.Collection("profileDiffs").Where("userId", "==", userId).Where("approval", "==", approval).OrderBy("timestamp", firestore.Desc).Limit(1).Documents(ctx)
 	var lastdiff Diff
 	var lastdiffId string
@@ -47,15 +46,15 @@ func getLastDiff(client *firestore.Client, ctx context.Context, userId string, a
 			break
 		}
 		if err != nil {
-			log.Fatal(err)
+			return Res{}, "", fmt.Errorf("failed to iterate profile diffs: %w", err)
 		}
 		err = Doc.DataTo(&lastdiff)
 		if err != nil {
-			log.Fatal(err)
+			return Res{}, "", fmt.Errorf("failed to convert diff data: %w", err)
 		}
 		lastdiffId = Doc.Ref.ID
 	}
-	return DiffToRes(lastdiff), lastdiffId
+	return DiffToRes(lastdiff), lastdiffId, nil
 }
 
 func generateAndStoreDiff(client *firestore.Client, ctx context.Context, res Res, userId string, sessionId string) error {
@@ -90,11 +89,33 @@ func SetProfileStatusBlocked(client *firestore.Client, ctx context.Context, user
 
 		responseBody := bytes.NewBuffer(postBody)
 
-		httpClient := &http.Client{}
-		req, _ := http.NewRequest("POST", os.Getenv(Constants["DISCORD_BOT_URL"])+"/profile/blocked", responseBody)
-		req.Header.Add("Content-Type", "application/json")
-		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", tokenString))
-		httpClient.Do(req)
+		discordURL := os.Getenv(Constants["DISCORD_BOT_URL"]) + "/profile/blocked"
+		req, err := http.NewRequestWithContext(ctx, "POST", discordURL, responseBody)
+		if err != nil {
+			LogWarnWithError("Failed to create Discord bot request", err, map[string]interface{}{
+				"function": "SetProfileStatusBlocked",
+				"userId":   userId,
+			})
+		} else {
+			req.Header.Add("Content-Type", "application/json")
+			req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", tokenString))
+			
+			// Create context with timeout and use client without timeout
+			reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			req = req.WithContext(reqCtx)
+			httpClient := &http.Client{} // No timeout - rely on context
+			resp, err := httpClient.Do(req)
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
+			if err != nil {
+				LogWarnWithError("Failed to notify Discord bot", err, map[string]interface{}{
+					"function": "SetProfileStatusBlocked",
+					"userId":   userId,
+				})
+			}
+		}
 	}
 
 	newLog := Log{
@@ -112,85 +133,121 @@ func SetProfileStatusBlocked(client *firestore.Client, ctx context.Context, user
 	client.Collection("logs").Add(ctx, newLog)
 }
 
-func Getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string, userData Res, sessionId string, discordId string) string {
-	var status string = ""
+// Getdata retrieves and processes profile data from user service
+// Returns an error if there's a problem, or nil if successful
+// If the profile should be skipped (same data, etc.), it returns nil but logs the skip reason
+func Getdata(client *firestore.Client, ctx context.Context, userId string, userUrl string, chaincode string, userData Res, sessionId string, discordId string) error {
 	userUrl = userUrl + "profile"
 	hashedChaincode, err := bcrypt.GenerateFromPassword([]byte(chaincode), bcrypt.DefaultCost)
 	if err != nil {
-		LogProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		SetProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
-		return "chaincode not encrypted"
+		errMsg := fmt.Sprintf("chaincode encryption failed: %v", err)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
+		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
+		return fmt.Errorf("chaincode not encrypted: %w", err)
 	}
 
-	httpClient := &http.Client{}
-	req, _ := http.NewRequest("GET", userUrl, nil)
+	// Create context with timeout and use client without timeout
+	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, "GET", userUrl, nil)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to create request: %v", err)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
+		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
+		return fmt.Errorf("error creating request: %w", err)
+	}
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", string(hashedChaincode)))
+	httpClient := &http.Client{} // No timeout - rely on context
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		LogProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		SetProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
-		return "error getting profile data"
+		errMsg := fmt.Sprintf("failed to get profile data: %v", err)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
+		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
+		return fmt.Errorf("error getting profile data: %w", err)
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 401 {
-		LogProfileSkipped(client, ctx, userId, "Unauthenticated Access to Profile Data", sessionId)
-		SetProfileStatusBlocked(client, ctx, userId, "Unauthenticated Access to Profile Data", sessionId, discordId)
-		resp.Body.Close()
-		return "unauthenticated access to profile data"
+		errMsg := "Unauthenticated Access to Profile Data"
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
+		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
+		return NewProfileError("UNAUTHENTICATED", errMsg, 401, nil)
 	}
 	if resp.StatusCode != 200 {
-		LogProfileSkipped(client, ctx, userId, "Error in getting Profile Data", sessionId)
-		SetProfileStatusBlocked(client, ctx, userId, "Error in getting Profile Data", sessionId, discordId)
-		resp.Body.Close()
-		return "error in getting profile data"
+		errMsg := "Error in getting Profile Data"
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
+		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
+		return fmt.Errorf("error in getting profile data: status code %d", resp.StatusCode)
 	}
-
-	defer resp.Body.Close()
 
 	r, err := io.ReadAll(resp.Body)
 	if err != nil {
-		LogProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		SetProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
-		return "error reading profile data"
+		errMsg := fmt.Sprintf("failed to read response: %v", err)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
+		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
+		return fmt.Errorf("error reading profile data: %w", err)
 	}
 	var res Res
 	err = json.Unmarshal([]byte(r), &res)
 	if err != nil {
-		LogProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		SetProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
-		return "error converting data to json"
+		errMsg := fmt.Sprintf("failed to unmarshal JSON: %v", err)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
+		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
+		return fmt.Errorf("error converting data to json: %w", err)
 	}
 
 	err = res.Validate()
-
 	if err != nil {
-		LogProfileSkipped(client, ctx, userId, fmt.Sprintln(err), sessionId)
-		SetProfileStatusBlocked(client, ctx, userId, fmt.Sprintln(err), sessionId, discordId)
-		return fmt.Sprintf("error in validation: ", err)
+		errMsg := fmt.Sprintf("validation failed: %v", err)
+		LogProfileSkipped(client, ctx, errMsg, userId, sessionId)
+		SetProfileStatusBlocked(client, ctx, userId, errMsg, sessionId, discordId)
+		return fmt.Errorf("error in validation: %w", err)
 	}
 
-	lastPendingDiff, lastPendingDiffId := getLastDiff(client, ctx, userId, "PENDING")
+	lastPendingDiff, lastPendingDiffId, err := getLastDiff(client, ctx, userId, "PENDING")
+	if err != nil {
+		// Log error but continue processing
+		LogWarnWithError("Failed to get last pending diff", err, map[string]interface{}{
+			"function": "Getdata",
+			"userId":   userId,
+		})
+	}
+
 	if lastPendingDiff != res && userData != res {
 		if lastPendingDiffId != "" {
 			SetNotApproved(client, ctx, lastPendingDiffId)
 		}
-		lastRejectedDiff, lastRejectedDiffId := getLastDiff(client, ctx, userId, Constants["NOT_APPROVED"])
+		lastRejectedDiff, lastRejectedDiffId, err := getLastDiff(client, ctx, userId, Constants["NOT_APPROVED"])
+		if err != nil {
+			LogWarnWithError("Failed to get last rejected diff", err, map[string]interface{}{
+				"function": "Getdata",
+				"userId":   userId,
+			})
+		}
 		if lastRejectedDiff != res {
-			generateAndStoreDiff(client, ctx, res, userId, sessionId)
+			err = generateAndStoreDiff(client, ctx, res, userId, sessionId)
+			if err != nil {
+				return fmt.Errorf("failed to generate and store diff: %w", err)
+			}
 		} else {
-			status = "same last rejected diff " + lastRejectedDiffId
-			LogProfileSkipped(client, ctx, userId, "Last Rejected Diff is same as New Profile Data. Rejected Diff Id: "+lastRejectedDiffId, sessionId)
+			LogProfileSkipped(client, ctx, "Last Rejected Diff is same as New Profile Data. Rejected Diff Id: "+lastRejectedDiffId, userId, sessionId)
+			// This is not an error, just a skip reason
+			return nil
 		}
 	} else if userData == res {
-		status = "same data exists"
-		LogProfileSkipped(client, ctx, userId, "Current User Data is same as New Profile Data", sessionId)
+		LogProfileSkipped(client, ctx, "Current User Data is same as New Profile Data", userId, sessionId)
 		if lastPendingDiffId != "" {
 			SetNotApproved(client, ctx, lastPendingDiffId)
 		}
+		// This is not an error, just a skip reason
+		return nil
 	} else {
-		status = "same last pending diff"
-		LogProfileSkipped(client, ctx, userId, "Last Pending Diff is same as New Profile Data", sessionId)
+		LogProfileSkipped(client, ctx, "Last Pending Diff is same as New Profile Data", userId, sessionId)
+		// This is not an error, just a skip reason
+		return nil
 	}
-	return status
+
+	return nil
 }
 
 func GetDataFromBody(body []byte) (string, string) {
@@ -228,46 +285,57 @@ Function to get the userData using userId
 
 func GetUserData(client *firestore.Client, ctx context.Context, userId string) (string, string, string, error) {
 	dsnap, err := client.Collection("users").Doc(userId).Get(ctx)
-	var profileURL string
-	var profileStatus string
-	var chaincode string
 	if err != nil {
 		return "", "", "", err
 	}
-	if str, ok := dsnap.Data()["profileURL"].(string); ok {
-		profileURL = str
-	} else {
+
+	var user User
+	err = dsnap.DataTo(&user)
+	if err != nil {
+		data := dsnap.Data()
+		
+		if profileURLVal, exists := data["profileURL"]; exists && profileURLVal != nil {
+			if _, ok := profileURLVal.(string); !ok {
+				return "", "", "", errors.New("profile url is not a string")
+			}
+		} else {
+			return "", "", "", errors.New("profile url is not a string")
+		}
+		
+		if chaincodeVal, exists := data["chaincode"]; exists && chaincodeVal != nil {
+			if _, ok := chaincodeVal.(string); !ok {
+				return "", "", "", errors.New("chaincode is not a string")
+			}
+		} else {
+			return "", "", "", errors.New("chaincode is not a string")
+		}
+		
+		return "", "", "", fmt.Errorf("failed to convert user data: %w", err)
+	}
+
+	if user.ProfileURL == "" {
 		return "", "", "", errors.New("profile url is not a string")
 	}
-	if str, ok := dsnap.Data()["profileStatus"].(string); ok {
-		profileStatus = str
-	} else {
-		profileStatus = ""
-	}
 
-	if str, ok := dsnap.Data()["chaincode"].(string); ok {
-		if str != "" {
-			chaincode = str
-		} else {
-			newLog := Log{
-				Type:      "VERIFICATION_BLOCKED",
-				Timestamp: time.Now(),
-				Meta: map[string]interface{}{
-					"userId": userId,
-				},
-				Body: map[string]interface{}{
-					"userId": userId,
-					"reason": "Chaincode is empty. Generate new one.",
-				},
-			}
-			client.Collection("logs").Add(ctx, newLog)
-			return "", "", "", errors.New("chaincode is blocked")
+	if user.Chaincode == "" {
+		newLog := Log{
+			Type:      "VERIFICATION_BLOCKED",
+			Timestamp: time.Now(),
+			Meta: map[string]interface{}{
+				"userId": userId,
+			},
+			Body: map[string]interface{}{
+				"userId": userId,
+				"reason": "Chaincode is empty. Generate new one.",
+			},
 		}
-	} else {
-		return "", "", "", errors.New("chaincode is not a string")
+		logCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		_, _, _ = client.Collection("logs").Add(logCtx, newLog)
+		cancel()
+		return "", "", "", errors.New("chaincode is blocked")
 	}
 
-	return profileURL, profileStatus, chaincode, nil
+	return user.ProfileURL, user.ProfileStatus, user.Chaincode, nil
 }
 
 /*

@@ -8,27 +8,13 @@ import (
 	"fmt"
 	"identity-service/layer/utils"
 	"io"
-	"log"
 	"math/rand"
-	"net/http"
 	"time"
 
 	"crypto/sha512"
 
-	"cloud.google.com/go/firestore"
-
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
 )
-
-/*
-Structures
-*/
-
-type deps struct {
-	client *firestore.Client
-	ctx    context.Context
-}
 
 /*
  Controller
@@ -36,7 +22,7 @@ type deps struct {
 /*
  Function to verify the user
 */
-func verify(profileURL string, chaincode string, salt string) (string, error) {
+func verify(ctx context.Context, profileURL string, chaincode string, salt string) (string, error) {
 	type res struct {
 		Hash string `json:"hash"`
 	}
@@ -46,7 +32,8 @@ func verify(profileURL string, chaincode string, salt string) (string, error) {
 	})
 
 	responseBody := bytes.NewBuffer(postBody)
-	resp, err := http.Post(profileURL, "application/json", responseBody)
+	
+	resp, err := utils.PostWithContext(ctx, profileURL, "application/json", responseBody, 10*time.Second)
 	if err != nil {
 		return "BLOCKED", err
 	}
@@ -66,16 +53,13 @@ func verify(profileURL string, chaincode string, salt string) (string, error) {
 	}
 }
 
-/*
-Main Handler Function
-*/
-func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func handler(d *utils.Deps, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	var userId string = utils.GetUserIdFromBody([]byte(request.Body))
 	if userId == "" {
 		return events.APIGatewayProxyResponse{}, errors.New("no userId provided")
 	}
 
-	profileURL, profileStatus, chaincode, err := utils.GetUserData(d.client, d.ctx, userId)
+	profileURL, profileStatus, chaincode, err := utils.GetUserData(d.Client, d.Ctx, userId)
 	if err != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
@@ -103,14 +87,14 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 	}
 	var salt string = string(b)
 
-	status, err := verify(profileURL, chaincode, salt)
+	status, err := verify(d.Ctx, profileURL, chaincode, salt)
 	if err != nil {
-		utils.LogVerification(d.client, d.ctx, status, profileURL, userId)
-		utils.SetProfileStatus(d.client, d.ctx, userId, status)
+		utils.LogVerification(d.Client, d.Ctx, status, profileURL, userId)
+		utils.SetProfileStatus(d.Client, d.Ctx, userId, status)
 		return events.APIGatewayProxyResponse{}, err
 	}
-	utils.LogVerification(d.client, d.ctx, status, profileURL, userId)
-	utils.SetProfileStatus(d.client, d.ctx, userId, status)
+	utils.LogVerification(d.Client, d.Ctx, status, profileURL, userId)
+	utils.SetProfileStatus(d.Client, d.Ctx, userId, status)
 
 	return events.APIGatewayProxyResponse{
 		Body:       "Verification Process Done",
@@ -118,20 +102,6 @@ func (d *deps) handler(request events.APIGatewayProxyRequest) (events.APIGateway
 	}, nil
 }
 
-/*
-Starts the lambda (Entry Point)
-*/
 func main() {
-	ctx := context.Background()
-	client, err := utils.InitializeFirestoreClient(ctx)
-	if err != nil {
-		log.Fatalf("Failed to initialize Firestore client: %v", err)
-	}
-
-	d := deps{
-		client: client,
-		ctx:    ctx,
-	}
-
-	lambda.Start(d.handler)
+	utils.InitializeLambdaWithFirestore("verify", handler)
 }

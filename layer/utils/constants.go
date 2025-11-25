@@ -28,6 +28,7 @@ type Res struct {
 	TwitterId   string `json:"twitter_id"`
 	InstagramId string `json:"instagram_id"`
 	Website     string `json:"website"`
+	DOB         string `json:"dob"`
 }
 
 type Diff struct {
@@ -46,10 +47,19 @@ type Diff struct {
 	TwitterId   string    `firestore:"twitter_id,omitempty"`
 	InstagramId string    `firestore:"instagram_id,omitempty"`
 	Website     string    `firestore:"website,omitempty"`
+	DOB         string    `firestore:"dob,omitempty"`
 }
 
 type Claims struct {
 	jwt.RegisteredClaims
+}
+
+type User struct {
+	ProfileURL    string `firestore:"profileURL,omitempty"`
+	ProfileStatus string `firestore:"profileStatus,omitempty"`
+	Chaincode     string `firestore:"chaincode,omitempty"`
+	DiscordID     string `firestore:"discordId,omitempty"`
+	UpdatedAt     int64  `firestore:"updated_at,omitempty"`
 }
 
 var Constants = map[string]string{
@@ -91,5 +101,6 @@ func diffToMap(diff Diff) map[string]interface{} {
 		"twitter_id":   diff.TwitterId,
 		"instagram_id": diff.InstagramId,
 		"website":      diff.Website,
+		"dob":          diff.DOB,
 	}
 }
