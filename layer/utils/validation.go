@@ -26,6 +26,7 @@ func resToDiff(res Res, userId string) Diff {
 		TwitterId:   res.TwitterId,
 		InstagramId: res.InstagramId,
 		Website:     res.Website,
+		DOB:         res.DOB,
 	}
 }
 
@@ -43,6 +44,7 @@ func DiffToRes(diff Diff) Res {
 		TwitterId:   diff.TwitterId,
 		InstagramId: diff.InstagramId,
 		Website:     diff.Website,
+		DOB:         diff.DOB,
 	}
 }
 
@@ -57,5 +59,6 @@ func (res Res) Validate() error {
 		validation.Field(&res.Designation, validation.Required),
 		validation.Field(&res.GithubId, validation.Required),
 		validation.Field(&res.LinkedIn, validation.Required),
-		validation.Field(&res.Website, is.URL))
+		validation.Field(&res.Website, is.URL),
+		validation.Field(&res.DOB, validation.Date("2006-01-02")))
 }
